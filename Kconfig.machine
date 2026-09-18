@@ -75,6 +75,16 @@ config MACHINE_VIRT_M68K
 	  0x0, same as every Atari/Amiga/ColdFire target, so no MMU
 	  bootstrap trick is needed the way MACHINE_VIRT_ARM needs one.
 
+config MACHINE_RP2350
+	bool "Raspberry Pi RP2350 (Waveshare RP2350-PiZero)"
+	help
+	  Bare metal port to the RP2350 microcontroller, as found on the
+	  Waveshare RP2350-PiZero board.  The Cortex-M33 cores have no MMU
+	  and only execute Thumb code, so this machine uses its own ARMv8-M
+	  architecture layer (arch/armv8m) on top of the shared ARM code.
+	  pTOS runs straight from the QSPI flash; RAM is the on-chip SRAM
+	  at 0x20000000.  See docs/superpowers/plans/2026-09-18-rp2350-port.md.
+
 endchoice
 
 choice
@@ -115,7 +125,13 @@ config ARCH_COLDFIRE
 
 config ARCH_ARM
 	bool
-	default y if MACHINE_RPI || MACHINE_VIRT_ARM
+	default y if MACHINE_RPI || MACHINE_VIRT_ARM || MACHINE_RP2350
+
+# ARMv8-M Mainline (Cortex-M33): Thumb only, no MMU, M-profile exception
+# model.  Selects arch/armv8m, searched before arch/arm.
+config ARCH_ARMV8M
+	bool
+	default y if MACHINE_RP2350
 
 # ARMv7 and later provide cache maintenance operations that the ARM1176
 # of the first generation Raspberry Pi does not have.
@@ -194,7 +210,7 @@ config CONF_WITH_BAS_MEMORY_MAP
 
 config CONF_WITH_ARM_PMMU
 	bool "Set up the ARM MMU"
-	depends on ARCH_ARM
+	depends on ARCH_ARM && !ARCH_ARMV8M
 	default y
 	help
 	  Install page tables and enable the MMU.  This is required to enable
@@ -371,6 +387,9 @@ config CPUFLAGS
 	default "-march=armv7-a -marm -mfpu=neon-vfpv4 -mfloat-abi=hard" if TARGET_RPI2
 	default "-march=armv8-a -mtune=cortex-a53 -marm -mfpu=neon-fp-armv8 -mfloat-abi=hard" if TARGET_RPI3
 	default "-march=armv8-a -mtune=cortex-a72 -marm -mfpu=neon-fp-armv8 -mfloat-abi=hard" if TARGET_RPI4
+	# Soft float: the kernel has no use for the FPU, and leaving it off keeps
+	# every exception frame the plain 8-word one (no lazy FP stacking).
+	default "-mcpu=cortex-m33 -mthumb -mfloat-abi=soft" if MACHINE_RP2350
 	default "-mcpu=5474" if MACHINE_FIREBEE
 	default "-mcpu=5475" if MACHINE_M548X
 	default "-m68040" if MACHINE_ARANYM

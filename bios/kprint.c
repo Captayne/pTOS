@@ -371,6 +371,14 @@ void dopanic(const char *fmt, ...)
                      (int) proc_enum);
         }
 
+#ifdef __ARM_ARCH_8M_MAIN__
+        /* bios/arch/armv8m/vectorsasm.S: fsr is CFSR (or HFSR when
+         * CFSR is empty), far is BFAR or MMFAR, spsr is the stacked xPSR */
+        kcprintf("cfsr=%08lx far=%08lx hfsr=%08lx\n",
+                 s->fsr, s->far, *(volatile ULONG *)0xe000ed2cUL);
+        kcprintf("xpsr=%08lx pc=%08lx\n",
+                 s->spsr, (ULONG)s->pc);
+#else
         ULONG control;
         extern long start_in_hyp;
         asm volatile ("mrc p15, 0, %0, c1, c0,  0" : "=r" (control));
@@ -378,6 +386,7 @@ void dopanic(const char *fmt, ...)
                  s->fsr, s->far, control);
         kcprintf("spsr=%08lx pc=%08lx hyp boot=%3s\n",
                  s->spsr, (ULONG)s->pc, start_in_hyp?"yes":"no");
+#endif
 
     }
 #elif defined(__mcoldfire__)

@@ -16,6 +16,7 @@ choice
 	default TARGET_SREC if ARCH_COLDFIRE
 	default TARGET_1024 if MACHINE_ARANYM
 	default TARGET_VIRT_M68K_KERNEL if MACHINE_VIRT_M68K
+	default TARGET_RP2350_UF2 if MACHINE_RP2350
 	default TARGET_256
 	help
 	  Select what the build should produce.  Only the image types that
@@ -115,6 +116,15 @@ config TARGET_VIRT_ARM_KERNEL
 	  Unlike the Raspberry Pi kernel image, this is not converted to a
 	  flat binary: QEMU's ELF loader is used directly, so the entry
 	  point and load addresses come from the ELF header.
+
+config TARGET_RP2350_UF2
+	bool "RP2350 flash image (.uf2)"
+	depends on MACHINE_RP2350
+	help
+	  A UF2 file to be copied onto the RPI-RP2350 mass-storage drive the
+	  bootrom presents in BOOTSEL mode.  pTOS executes in place from the
+	  QSPI flash at 0x10000000.  The linked ELF (ptos-rp2350.elf) is kept
+	  as well for use with a debugger.
 
 config TARGET_VIRT_M68K_KERNEL
 	bool "QEMU virt (m68k) kernel image"

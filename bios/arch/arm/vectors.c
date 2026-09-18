@@ -28,6 +28,7 @@
 #include "xbios.h"
 #include "sound.h"
 #include "mfp.h"
+#include "lowmem.h"
 
 // ==== Definitions ==========================================================
 
@@ -54,15 +55,17 @@ typedef struct {
 
 static void any_vec(int vector_addr, exception_frame_t* stack_frame, ULONG fsr, ULONG far);
 
+/* The 68k-style vector table sits at the start of ST-RAM, which is not
+ * address 0 on every ARM machine (see lowmem.h). */
 volatile PFVOID *vector_address(ULONG address)
 {
-    return (volatile PFVOID *)address;
+    return (volatile PFVOID *)(LOWMEM_BASE + address);
 }
 
 /* basically initialize the 62 exception vectors. */
 void init_exc_vec(void)
 {
-    volatile ULONG* vector_addr = (ULONG*)0x8;
+    volatile ULONG* vector_addr = (ULONG*)(LOWMEM_BASE + 0x8);
     int i;
     proc_lives = 0;
     for(i=0; i<62; i++)
@@ -73,7 +76,7 @@ void init_exc_vec(void)
 
 void init_user_vec(UWORD first_boot)
 {
-    volatile ULONG* vector_addr = (ULONG*)0x100;
+    volatile ULONG* vector_addr = (ULONG*)(LOWMEM_BASE + 0x100);
     int i;
     MAYBE_UNUSED(first_boot);
     for(i=0; i<192; i++)

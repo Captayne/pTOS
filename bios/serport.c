@@ -35,6 +35,9 @@
 #if CONF_WITH_VIRT_UART
 #include "virt_uart.h"
 #endif
+#if CONF_WITH_RP2350_UART
+#include "rp2350_uart.h"
+#endif
 #if CONF_WITH_GOLDFISH_TTY
 #include "goldfish_tty.h"
 #endif
@@ -149,6 +152,8 @@ LONG bconstat1(void)
     return raspi_uart0_can_read() ? -1 : 0;
 #elif CONF_WITH_VIRT_UART
     return virt_uart0_can_read() ? -1 : 0;
+#elif CONF_WITH_RP2350_UART
+    return rp2350_uart0_can_read() ? -1 : 0;
 #elif CONF_WITH_GOLDFISH_TTY
     return goldfish_tty_can_read() ? -1 : 0;
 #elif CONF_WITH_COLDFIRE_RS232 || CONF_WITH_MFP_RS232
@@ -168,6 +173,8 @@ LONG bconin1(void)
     return raspi_uart0_read_byte();
 #elif CONF_WITH_VIRT_UART
     return virt_uart0_read_byte();
+#elif CONF_WITH_RP2350_UART
+    return rp2350_uart0_read_byte();
 #elif CONF_WITH_GOLDFISH_TTY
     return goldfish_tty_read_byte();
 #elif CONF_WITH_COLDFIRE_RS232 || CONF_WITH_MFP_RS232
@@ -192,6 +199,8 @@ LONG bcostat1(void)
     return raspi_uart0_can_write() ? -1 : 0;
 #elif CONF_WITH_VIRT_UART
     return virt_uart0_can_write() ? -1 : 0;
+#elif CONF_WITH_RP2350_UART
+    return rp2350_uart0_can_write() ? -1 : 0;
 #elif CONF_WITH_GOLDFISH_TTY
     return goldfish_tty_can_write() ? -1 : 0;
 #elif CONF_WITH_MFP_RS232
@@ -228,6 +237,9 @@ LONG bconout1(WORD dev, WORD b)
     return 1;
 #elif CONF_WITH_VIRT_UART
     virt_uart0_write_byte(b);
+    return 1;
+#elif CONF_WITH_RP2350_UART
+    rp2350_uart0_write_byte(b);
     return 1;
 #elif CONF_WITH_GOLDFISH_TTY
     goldfish_tty_write_byte(b);

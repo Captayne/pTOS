@@ -80,6 +80,9 @@
 #include "virt_pic.h"
 #include "virt_timer.h"
 #endif
+#ifdef MACHINE_RP2350
+#include "rp2350_int.h"
+#endif
 #ifdef MACHINE_VIRT_M68K
 #include "goldfish_pic.h"
 #include "goldfish_rtc.h"
@@ -203,6 +206,7 @@ static struct {
         { 0x410fc0f0, 0xff0ffff0, "Cortex-A15" },
         { 0x410fc0e0, 0xff0ffff0, "Cortex-A17" },
         { 0x410fd030, 0xff0ffff0, "Cortex-A53" },
+        { 0x410fd210, 0xff0ffff0, "Cortex-M33" },
         { 0x410fd040, 0xff0ffff0, "Cortex-A35" },
         { 0x410fd050, 0xff0ffff0, "Cortex-A55" },
         { 0x410fd070, 0xff0ffff0, "Cortex-A57" },
@@ -403,6 +407,9 @@ static void bios_init(void)
     virt_pic_init();
     virt_timer_init();     /* arms the GIC/timer; the CPU stays masked until
                              * the shared cpsr_ie() below, same as raspi */
+#elif defined(MACHINE_RP2350)
+    rp2350_int_init();     /* NVIC and the SysTick system timer; the CPU
+                             * stays masked until cpsr_ie() below */
 #elif defined(MACHINE_VIRT_M68K)
     goldfish_pic_init();
     goldfish_rtc_init();
@@ -1343,7 +1350,12 @@ LONG setexc(WORD num, LONG vector)
         return oldvector;
     }
 
+#ifdef __arm__
+    /* the vector table is not necessarily at address 0 (see lowmem.h) */
+    addr = (LONG *) vector_address(4L * num);
+#else
     addr = (LONG *) (4L * num);
+#endif
     oldvector = *addr;
 
     if(vector != -1) {

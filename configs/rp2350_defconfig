@@ -1,0 +1,22 @@
+# Waveshare RP2350-PiZero (RP2350B, Cortex-M33), booting straight to the
+# EmuCON command line on the serial console.  pTOS runs in place from the
+# QSPI flash; the UF2 image is copied onto the BOOTSEL drive.  See
+# docs/superpowers/plans/2026-09-18-rp2350-port.md.
+MACHINE_RP2350=y
+
+# The multi-language image supports every country at run time.  It costs
+# flash, not RAM, and there are 16 MB of flash.
+# BUILD_UNIQUE_COUNTRY is not set
+
+# No IDE interface, no Line-A emulator (m68k only), no XHDI (m68k only).
+CONF_WITH_IDE=n
+CONF_WITH_LINEA=n
+CONF_WITH_XHDI=n
+
+# Phase 1: command line only.  The AES/desktop needs a screen, which comes
+# with the video phase.
+CONF_WITH_AES=n
+
+# Kernel debug output (kprintf, KINFO) goes to the console UART, which
+# also feeds the USB console.
+DEBUG_PRINT_RS232=y
