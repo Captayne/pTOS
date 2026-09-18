@@ -87,6 +87,41 @@ static inline void stop_until_interrupt(void)
 #define cpsr_ie() __asm__ volatile ("cpsie i")
 #define cpsr_id() __asm__ volatile ("cpsid i")
 
+#ifdef __ARM_ARCH_8M_MAIN__
+/*
+ * ARMv8-M (Cortex-M33) has no CPSR.  The only part of it pTOS saves and
+ * restores around critical sections is the interrupt mask, which on
+ * M-profile is PRIMASK (bit 0 set = interrupts masked).  get_cpsr() and
+ * set_cpsr() therefore read and write PRIMASK, so a value obtained from
+ * get_cpsr() or disable_interrupts() can be handed back to set_cpsr()
+ * exactly as on the A-profile cores.  There are no processor mode bits;
+ * code that fabricates a mode (bdos/proc.c) has its own ARMv8-M branch.
+ */
+#define set_cpsr(a)                       \
+__extension__                             \
+({int _r, _a = (a);                       \
+  __asm__ volatile                        \
+  ("mrs %0, primask\n\t"                  \
+   "msr primask, %1"                      \
+  : "=&r"(_r)       /* outputs */         \
+  : "r"(_a)          /* inputs  */        \
+  : "cc", "memory"   /* clobbered */      \
+  );                                      \
+  _r;                                     \
+})
+
+#define get_cpsr()                        \
+ __extension__                            \
+({int _r;                                 \
+  __asm__ volatile                        \
+  ("mrs %0, primask\n\t"                  \
+  : "=r"(_r)        /* outputs */         \
+  :                  /* inputs  */        \
+  : "cc", "memory"   /* clobbered */      \
+  );                                      \
+  _r;                                     \
+})
+#else
 #define set_cpsr(a)                       \
 __extension__                             \
 ({int _r, _a = (a);                       \
@@ -111,6 +146,7 @@ __extension__                             \
   );                                      \
   _r;                                     \
 })
+#endif /* __ARM_ARCH_8M_MAIN__ */
 
 extern ULONG disable_interrupts(void);
 extern void enable_interrupts(void);

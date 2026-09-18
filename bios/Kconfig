@@ -432,6 +432,14 @@ config CONF_WITH_VIRT_UART
 	  Use the PL011 UART exposed by QEMU's ARM 'virt' machine as the
 	  serial console.
 
+config CONF_WITH_RP2350_UART
+	bool "RP2350 UART0 (PL011) support"
+	depends on MACHINE_RP2350
+	default y
+	help
+	  Use UART0 of the RP2350 (GPIO0 TX, GPIO1 RX, 115200 8N1) as the
+	  serial console.
+
 config CONF_WITH_GOLDFISH_TTY
 	bool "QEMU virt (m68k) Goldfish TTY support"
 	depends on MACHINE_VIRT_M68K

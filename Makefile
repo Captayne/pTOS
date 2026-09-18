@@ -98,6 +98,7 @@ include country.mk
 
 ARCH-$(ARCH_COLDFIRE) += coldfire
 ARCH-$(ARCH_M68K) += m68k
+ARCH-$(ARCH_ARMV8M) += armv8m
 ARCH-$(ARCH_ARM) += arm
 ARCH = $(ARCH-y)
 
@@ -109,6 +110,7 @@ MACHINE-$(MACHINE_AMIGA) += amiga
 MACHINE-$(MACHINE_RPI) += raspi
 MACHINE-$(MACHINE_VIRT_ARM) += virt-arm
 MACHINE-$(MACHINE_VIRT_M68K) += virt-m68k
+MACHINE-$(MACHINE_RP2350) += rp2350
 MACHINE = $(MACHINE-y)
 
 ifdef CONFIGURED
@@ -380,6 +382,10 @@ ifdef TARGET_VIRT_M68K_KERNEL
 image-default = virt-m68k.elf
 MEMBOT_REFERENCE = TOS162
 endif
+ifdef TARGET_RP2350_UF2
+image-default = ptos-rp2350.uf2
+MEMBOT_REFERENCE = TOS162
+endif
 
 IMAGE = $(if $(IMAGE_NAME),$(IMAGE_NAME),$(image-default))
 
@@ -531,6 +537,17 @@ endif
 ifdef TARGET_VIRT_ARM_KERNEL
 $(IMAGE): $(EMUTOS_IMG)
 	cp $< $@
+endif
+
+#
+# RP2350 flash image: the ELF is kept for the debugger, the UF2 is what
+# gets copied onto the bootrom's BOOTSEL mass-storage drive.
+#
+
+ifdef TARGET_RP2350_UF2
+$(IMAGE): $(EMUTOS_IMG) tools/elf2uf2.py
+	cp $< ptos-rp2350.elf
+	python3 tools/elf2uf2.py $< $@
 endif
 
 #

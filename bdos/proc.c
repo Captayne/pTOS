@@ -569,7 +569,23 @@ static UBYTE *alloc_tpa(ULONG flags,LONG needed,LONG *avail)
  *
  */
 
-#ifdef __arm__
+#ifdef __ARM_ARCH_8M_MAIN__
+/*
+ * ARMv8-M: the saved GEMDOS arguments, the resume record and the exception
+ * frame through which the process is entered -- the same layout a GEMDOS
+ * call from user mode leaves behind (see bdos/arch/armv8m/rwa.S and
+ * bios/arch/armv8m/vectorsasm.S), so that gouser() can "return" into the
+ * new process.  80 bytes: p_hitpa stays 8-byte aligned for the frame.
+ */
+struct gouser_stack {
+    LONG regs[8];       /* r0-r7 as saved by enter(); r4-r7 are reloaded */
+    ULONG *frame;       /* resume record: the exception frame below, */
+    LONG other_sp;      /* the main stack to use while in user mode, */
+    ULONG control;      /* CONTROL (bit 0 set: unprivileged), */
+    ULONG exc_return;   /* EXC_RETURN (Thread mode, process stack) */
+    ULONG frame_regs[8];/* r0-r3, r12, lr, pc, xpsr */
+};
+#elif defined(__arm__)
 struct gouser_stack {
     LONG regs[8];    /* argument registers from previous call (r7, r0-r6) */
     LONG other_sp;   /* the other stack pointer */
@@ -596,7 +612,24 @@ static void proc_go(PD *p)
     /* create a stack at the end of the TPA */
     sp = (struct gouser_stack *) (p->p_hitpa - sizeof(struct gouser_stack));
 
-#ifdef __arm__
+#ifdef __ARM_ARCH_8M_MAIN__
+    memset(sp, 0, sizeof(struct gouser_stack));
+    p->p_dreg[0] = (LONG)p;  /* base page is passed in r0 */
+    sp->frame = sp->frame_regs;
+    sp->other_sp = (long) &supstk[SUPSIZ];
+    sp->control = 1;                /* user mode, interrupts enabled */
+    sp->exc_return = 0xfffffffdUL;  /* Thread mode, process stack */
+    sp->frame_regs[0] = (LONG)p;
+    sp->frame_regs[6] = (ULONG)p->p_tbase & ~1UL;  /* entry point */
+    sp->frame_regs[7] = 0x01000000UL;               /* xpsr: Thumb */
+    /* store this new stack in the saved sp field of the PD */
+    p->p_areg[7-3] = (long) sp;
+
+    /* the new process is the one to run: termuser() resumes it through
+     * the frame above, with p_dreg[0] (the basepage) in r0 */
+    run = (PD *)p;
+    termuser();
+#elif defined(__arm__)
     p->p_dreg[0] = (LONG)p;  /* base page is passed in r0 */
     sp->spsr = ((get_cpsr() & ~0x1f) | 0x10); /* the process will start in user mode, same interrupts */
     sp->retaddr = (long)p->p_tbase; /* return address is text start */

@@ -29,6 +29,15 @@
 
 #ifdef __arm__
 
+#ifdef __ARM_ARCH_8M_MAIN__
+/* ARMv8-M only executes Thumb code.  Every code symbol must be typed as a
+ * function, so that its address carries the Thumb bit (bit 0) wherever it
+ * is taken: in vector tables, in literal pools and in function pointers. */
+        .syntax unified
+        .thumb
+#define ASM_FUNC(name) .type C_SYM(name), %function; C_SYM(name)
+#endif
+
 #else
 
 /* generate constants for opcodes that are 68010 and above */

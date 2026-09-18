@@ -19,7 +19,7 @@
 #define C_SYM0(prefix, name) C_SYM1(prefix, name)
 #define C_SYM(name) C_SYM0(__USER_LABEL_PREFIX__, name)
 
-#if !defined(MACHINE_RPI) && !defined(MACHINE_VIRT_ARM) && !defined(MACHINE_VIRT_M68K)
+#if !defined(MACHINE_RPI) && !defined(MACHINE_VIRT_ARM) && !defined(MACHINE_VIRT_M68K) && !defined(MACHINE_RP2350)
 /* Create a plain binary file, without any header (not possible on ARM).
  * MACHINE_VIRT_M68K is excluded for a different reason than the ARM
  * machines: it needs a real ELF image for QEMU's -kernel loader (see
@@ -35,6 +35,13 @@ OUTPUT_FORMAT(binary)
  * plain ELF image, and elf32-atariprg's relocation handling also rejects
  * some relocations this link produces. Force the generic target instead. */
 OUTPUT_FORMAT(elf32-m68k)
+#endif
+
+#if defined(MACHINE_RP2350)
+/* Not used by the bootrom (it takes the initial SP and PC from the vector
+ * table at the start of flash), but tells a debugger where execution
+ * starts. */
+ENTRY(C_SYM(rp2350_reset))
 #endif
 
 #if defined(MACHINE_VIRT_ARM) || defined(MACHINE_VIRT_M68K)
@@ -53,6 +60,8 @@ ENTRY(C_SYM(os_entry))
  * (the ARM kernel load address) rather than following REGION_RAM. */
 #if defined(MACHINE_AMIGA)
 # define ROM_ORIGIN 0x00fc0000
+#elif defined (MACHINE_RP2350)
+# define ROM_ORIGIN 0x10000000  /* QSPI flash, executed in place */
 #elif defined (MACHINE_RPI)
 # define ROM_ORIGIN 0x00008000
 #elif defined (TARGET_CART)
@@ -69,7 +78,11 @@ ENTRY(C_SYM(os_entry))
  * Then our padding tool will eventually report an overflow, with a better
  * diagnostic message than the linker.
  */
+#if defined(MACHINE_RP2350)
+#define ROM_LENGTH 16M /* QSPI flash on the RP2350-PiZero */
+#else
 #define ROM_LENGTH 1M /* Maximum size before I/O area */
+#endif
 
 #endif /* !EMUTOS_LIVES_IN_RAM */
 
@@ -78,7 +91,14 @@ ENTRY(C_SYM(os_entry))
  */
 MEMORY
 {
+#if defined(MACHINE_RP2350)
+    /* On-chip SRAM: SRAM0-7 (512 KB, striped) followed by SRAM8-9 (2 x 4 KB).
+     * Its first 2 KB play the role of the 68k low memory (emulated vector
+     * table and system variables), exactly like address 0 elsewhere. */
+    stram : ORIGIN = 0x20000000, LENGTH = 520K
+#else
     stram : ORIGIN = 0x00000000, LENGTH = 14M
+#endif
 #if !EMUTOS_LIVES_IN_RAM
     rom : ORIGIN = ROM_ORIGIN, LENGTH = ROM_LENGTH
 #endif
@@ -158,7 +178,7 @@ SECTIONS
     } >altram
 #endif
 
-#if !defined (MACHINE_RPI) && !defined (MACHINE_VIRT_ARM)
+#if !defined (MACHINE_RPI) && !defined (MACHINE_VIRT_ARM) && !defined (MACHINE_RP2350)
     /* This section is the internal BIOS stack.
      * It will *not* be cleared on startup or reset.
      */
@@ -198,9 +218,11 @@ SECTIONS
          __low_stram_start = .;
          obj/lowstram.o(.bss COMMON)
          __low_stram_end = .;
-         ASSERT(ABSOLUTE(C_SYM(shifty)) < 0x8000, "error: bad _shifty address");
+         /* Relative to the start of ST-RAM, which is 0 everywhere except
+          * on the RP2350, whose SRAM starts at 0x20000000. */
+         ASSERT(ABSOLUTE(C_SYM(shifty)) - ORIGIN(stram) < 0x8000, "error: bad _shifty address");
         ASSERT((ABSOLUTE(C_SYM(dskbuf)) & 3) == 0, "error: bad _dskbuf alignment");
-        ASSERT(ABSOLUTE(__low_stram_end) <= 0x8000, "error: .low_stram section extends beyond 32k");
+        ASSERT(ABSOLUTE(__low_stram_end) - ORIGIN(stram) <= 0x8000, "error: .low_stram section extends beyond 32k");
     } >stram
 
     /* The TEXT segment contains EmuTOS executable code and read-only data.
@@ -251,7 +273,7 @@ SECTIONS
          C_SYM(_ebss) = __ebss;
     } >REGION_READ_WRITE
 
-#if defined (MACHINE_RPI) || defined (MACHINE_VIRT_ARM)
+#if defined (MACHINE_RPI) || defined (MACHINE_VIRT_ARM) || defined (MACHINE_RP2350)
     /* On the ARM machines (RPI, QEMU virt) we put the BIOS stack /after/
      * the rom data.  We have more RAM, so make it a little bigger than in
      * the ST case.
@@ -267,7 +289,11 @@ SECTIONS
          */
         . = ALIGN(8);
         C_SYM(stkbot) = .;
+#if defined (MACHINE_RP2350)
+        . += 16K;   /* MSP: supervisor code and all exception handlers */
+#else
         . += 32K;
+#endif
         C_SYM(stktop) = .;
      } >REGION_READ_WRITE
 #endif
