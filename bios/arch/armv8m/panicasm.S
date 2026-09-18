@@ -58,10 +58,15 @@ ASM_FUNC(panic):
         ldm     r12, {r0-r11}
         b       C_SYM(dopanic)
 
-/* void halt(void) */
+/* void halt(void)
+ * Stop here for good.  The machine's armv8m_halt_hook() keeps whatever
+ * must go on regardless running -- on the RP2350, the USB console that
+ * carries the panic message.
+ */
         .balign 4
 ASM_FUNC(halt):
-1:      wfi
+        cpsid   i
+1:      bl      C_SYM(armv8m_halt_hook)
         b       1b
 
 /* void kill_program(void)

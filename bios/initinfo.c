@@ -299,7 +299,7 @@ WORD initinfo(ULONG *pshiftbits)
 #endif
     int i;
     WORD olddev, dev = bootdev;
-    long stramsize = (long)phystop;
+    long stramsize = (long)phystop - LOWMEM_BASE;  /* ST-RAM starts there */
 #if CONF_WITH_ALT_RAM
     long altramsize = total_alt_ram();
 #endif

@@ -13,7 +13,6 @@
  */
 
 #include "asmdefs.h"
-#include "lowmem.h"
 #include "rp2350.h"
 
         .globl  C_SYM(rp2350_reset)
@@ -36,7 +35,11 @@
 rp2350_vectors:
         .word   C_SYM(stktop)                   // initial MSP
         .word   C_SYM(rp2350_reset)             // Reset
+#if CONF_WITH_RP2350_MONITOR
+        .word   C_SYM(rp2350_nmi_entry)         // NMI: bring-up monitor
+#else
         .word   C_SYM(armv8m_fault_handler)     // NMI
+#endif
         .word   C_SYM(armv8m_fault_handler)     // HardFault
         .word   C_SYM(armv8m_fault_handler)     // MemManage
         .word   C_SYM(armv8m_fault_handler)     // BusFault
@@ -120,6 +123,17 @@ ASM_FUNC(main):
         ldr     r0, =C_SYM(stktop)
         mov     sp, r0
         b       C_SYM(biosmain)
+
+#if CONF_WITH_RP2350_MONITOR
+// NMI: hand the interrupted context's frame to the bring-up monitor
+        .balign 4
+ASM_FUNC(rp2350_nmi_entry):
+        tst     lr, #4
+        ite     eq
+        mrseq   r0, msp
+        mrsne   r0, psp
+        b       C_SYM(rp2350_monitor_nmi)
+#endif
 
 // bios/kprint.c's dopanic() reads this on every ARM machine.
         .balign 4

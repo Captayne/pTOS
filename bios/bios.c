@@ -1351,7 +1351,7 @@ LONG setexc(WORD num, LONG vector)
     }
 
 #ifdef __arm__
-    /* the vector table is not necessarily at address 0 (see lowmem.h) */
+    /* the vector table is not necessarily at address 0 (see LOWMEM_BASE in config.h) */
     addr = (LONG *) vector_address(4L * num);
 #else
     addr = (LONG *) (4L * num);

@@ -326,11 +326,13 @@ static void rx_arm(void)
 /* start sending the next part of the output ring, if possible */
 static void tx_kick(void)
 {
+    static volatile BOOL kicking;   /* the bring-up NMI may get here too */
     volatile UBYTE *buf = DPRAM_PTR(EP2_IN_BUF);
     UWORD len = 0;
 
-    if (!configured || tx_busy || tx_head == tx_tail)
+    if (!configured || tx_busy || tx_head == tx_tail || kicking)
         return;
+    kicking = TRUE;
 
     while (len < BULK_SIZE && tx_tail != tx_head)
     {
@@ -340,6 +342,7 @@ static void tx_kick(void)
     tx_busy = TRUE;
     buf_ctrl_write(EP2_IN_BUF_CTRL, len | BUF_FULL | ep2_in_pid | BUF_AVAIL);
     ep2_in_pid ^= BUF_DATA1;
+    kicking = FALSE;
 }
 
 static void set_configuration(UWORD value)
@@ -554,8 +557,9 @@ static void usb_irq(void)
     in_poll = FALSE;
 }
 
-/* Drive the controller by hand, when interrupts cannot do it. */
-static void usb_poll(void)
+/* Drive the controller by hand, when interrupts cannot do it: during
+ * early boot, with interrupts masked, and after a panic (see halt()). */
+void rp2350_usbcon_poll(void)
 {
     ULONG primask;
 
@@ -577,7 +581,7 @@ void rp2350_usbcon_putc(UBYTE c)
          * ourselves in case interrupts are masked. */
         if (!dtr || !configured || in_poll)
             return;
-        usb_poll();
+        rp2350_usbcon_poll();
     }
     tx_ring[tx_head] = c;
     tx_head = next;
@@ -602,7 +606,7 @@ UBYTE rp2350_usbcon_getc(void)
     UBYTE c;
 
     while (rx_head == rx_tail)
-        usb_poll();
+        rp2350_usbcon_poll();
     c = rx_ring[rx_tail];
     rx_tail = (rx_tail + 1) % RX_RING_SIZE;
 
@@ -610,9 +614,10 @@ UBYTE rp2350_usbcon_getc(void)
 }
 
 /*
- * Called once the interrupt controller is set up (rp2350_int_init()).
- * The controller clock (clk_usb, 48 MHz) and its reset are handled by
- * rp2350_board_init().
+ * Called from rp2350_board_init(), right after the clocks are up (clk_usb
+ * at 48 MHz) and the controller is out of reset.  Until
+ * rp2350_usbcon_attach_irq() the controller is only driven by
+ * rp2350_usbcon_poll().
  */
 void rp2350_usbcon_init(void)
 {
@@ -635,8 +640,20 @@ void rp2350_usbcon_init(void)
     USB_REG(INTE) = INT_SETUP_REQ | INT_BUS_RESET | INT_BUFF_STATUS;
 
     usb_up = TRUE;
-    rp2350_connect_irq(RP2350_USBCTRL_IRQ, usb_irq);
 
     /* present ourselves to the host */
     USB_REG_SET(SIE_CTRL) = SIE_CTRL_PULLUP_EN;
+}
+
+/* Called once the interrupt controller is set up (rp2350_int_init()) */
+void rp2350_usbcon_attach_irq(void)
+{
+    rp2350_connect_irq(RP2350_USBCTRL_IRQ, usb_irq);
+}
+
+/* bios/arch/armv8m/panicasm.S: halt() keeps the USB console alive, so
+ * that the panic message still reaches the host */
+void armv8m_halt_hook(void)
+{
+    rp2350_usbcon_poll();
 }

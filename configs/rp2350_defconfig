@@ -20,3 +20,6 @@ CONF_WITH_AES=n
 # Kernel debug output (kprintf, KINFO) goes to the console UART, which
 # also feeds the USB console.
 DEBUG_PRINT_RS232=y
+
+# Bring-up: heartbeat NMI keeps the USB console alive and reports the PC.
+CONF_WITH_RP2350_MONITOR=y

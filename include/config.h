@@ -43,6 +43,18 @@
 #endif
 
 /*
+ * Start of ST-RAM, where the 68k-style exception vectors (0x000-0x3ff) and
+ * the system variables area (up to 0x800) live.  Address 0 everywhere,
+ * except on the RP2350: its bootrom sits at 0 and there is no MMU to remap
+ * the on-chip SRAM (see emutos.ld).
+ */
+#ifdef MACHINE_RP2350
+#define LOWMEM_BASE 0x20000000
+#else
+#define LOWMEM_BASE 0
+#endif
+
+/*
  * Value written at the bottom of the desktop stack to detect overflows.
  */
 #if CONF_DEBUG_DESK_STACK

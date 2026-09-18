@@ -54,6 +54,14 @@ typedef unsigned long uint32_t;
 #define ARM_CPU_PART_SCORPION		0x510002d0
 
 
+#ifdef __ARM_ARCH_8M_MAIN__
+/* ARMv8-M has no CP15: the CPUID register is memory mapped in the System
+ * Control Block, with the same layout as the A-profile MIDR. */
+static inline uint32_t __attribute__((__const__)) read_cpuid_id(void)
+{
+	return *(volatile uint32_t *)0xe000ed00UL;
+}
+#else
 #define read_cpuid(reg)						\
 	({								\
 		register uint32_t __val;			\
@@ -73,6 +81,7 @@ static inline uint32_t __attribute__((__const__)) read_cpuid_mputype(void)
 {
 	return read_cpuid(CPUID_MPUIR);
 }
+#endif /* __ARM_ARCH_8M_MAIN__ */
 
 void invalidate_data_cache_all(void);
 void flush_data_cache_all(void);
