@@ -1136,6 +1136,12 @@ LIBCMINI_DIR  = lib/libcmini
 LIBCMINI_INC  = $(LIBCMINI_DIR)/include
 LIBCMINI_BUILDDIR = $(abspath obj/libcmini-build)
 LIBCMINI_MAKE = $(MAKE) -C $(LIBCMINI_DIR) BUILDDIR=$(LIBCMINI_BUILDDIR)
+ifdef ARCH_ARMV8M
+# libcmini bakes in the A-profile hard-float VFP ABI and otherwise builds for
+# the toolchain's default ARM architecture; a Cortex-M33 needs Thumb code for
+# its own CPU and the kernel's float ABI.
+LIBCMINI_MAKE += ARCH_CFLAGS="$(CPUFLAGS)" ARM_ABI_CFLAGS=
+endif
 LIBCMINI_OBJDIR = $(LIBCMINI_BUILDDIR)/./objs
 LIBCMINI_CRT0 = $(LIBCMINI_OBJDIR)/minicrt0.o
 LIBCMINI_LIB  = $(LIBCMINI_BUILDDIR)/./libcmini.a
