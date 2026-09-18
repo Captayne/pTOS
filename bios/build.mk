@@ -56,9 +56,10 @@ obj-$(CONF_WITH_RASPI_VSYNC_IRQ) += raspi_vsync.o
 obj-$(MACHINE_VIRT_ARM) += virt_uart.o virt_mmu.o virt_pic.o virt_timer.o
 
 obj-$(MACHINE_RP2350) += rp2350_board.o rp2350_int.o rp2350_uart.o rp2350_usbcon.o
+obj-$(CONF_WITH_RP2350_MONITOR) += rp2350_monitor.o
 
 # ARMv8-M replacements for what the A-profile code does with CPSR modes.
-obj-$(ARCH_ARMV8M) += super.o
+obj-$(ARCH_ARMV8M) += super.o earlyfault.o
 
 obj-$(MACHINE_VIRT_M68K) += goldfish_tty.o goldfish_pic.o goldfish_rtc.o goldfish_rtc_isr.o goldfish_pic_isr.o
 

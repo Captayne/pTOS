@@ -28,7 +28,6 @@
 #include "xbios.h"
 #include "sound.h"
 #include "mfp.h"
-#include "lowmem.h"
 
 // ==== Definitions ==========================================================
 
@@ -56,7 +55,7 @@ typedef struct {
 static void any_vec(int vector_addr, exception_frame_t* stack_frame, ULONG fsr, ULONG far);
 
 /* The 68k-style vector table sits at the start of ST-RAM, which is not
- * address 0 on every ARM machine (see lowmem.h). */
+ * address 0 on every ARM machine (see LOWMEM_BASE in config.h). */
 volatile PFVOID *vector_address(ULONG address)
 {
     return (volatile PFVOID *)(LOWMEM_BASE + address);

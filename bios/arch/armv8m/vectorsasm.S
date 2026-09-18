@@ -8,7 +8,7 @@
  * option any later version.  See doc/license.txt for details.
  *
  * pTOS keeps the m68k convention of a table of exception vectors in low
- * memory (see lowmem.h); on ARM, "trap #n" is "svc #n" and dispatches
+ * memory (LOWMEM_BASE, see config.h); on ARM, "trap #n" is "svc #n" and dispatches
  * through the vector at 0x80 + 4n.
  *
  * On the A-profile cores the SVC exception simply runs the trap handler in
@@ -39,7 +39,6 @@
  */
 
 #include "asmdefs.h"
-#include "lowmem.h"
 
 #define SCB_CFSR    0xe000ed28
 #define SCB_HFSR    0xe000ed2c
@@ -252,6 +251,9 @@ not_svc:
         mov     r1, sp
         ldr     r12, =LOWMEM_BASE
         ldr     r12, [r12, r0]
+        cmp     r12, #0                 // vector table not set up yet?
+        it      eq
+        ldreq   r12, =C_SYM(armv8m_early_fault)
         blx     r12                     // any_vec(vector, frame, fsr, far)
 2:      b       2b
 

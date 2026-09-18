@@ -15,6 +15,9 @@
 #endif
 
 void rp2350_usbcon_init(void);
+void rp2350_usbcon_attach_irq(void);
+void rp2350_usbcon_poll(void);
+void armv8m_halt_hook(void);
 void rp2350_usbcon_putc(UBYTE c);
 BOOL rp2350_usbcon_can_read(void);
 UBYTE rp2350_usbcon_getc(void);

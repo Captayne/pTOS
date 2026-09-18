@@ -19,6 +19,7 @@
 #include "rp2350_uart.h"
 #include "ikbd.h"
 #include "rp2350_usbcon.h"
+#include "earlyfault.h"
 
 #define BAUDRATE        115200UL
 #define UART_TX_PIN     0
@@ -67,6 +68,12 @@ void rp2350_uart0_write_byte(UBYTE b)
     while (!rp2350_uart0_can_write())
         ;
     UART0_DR = b;
+}
+
+/* bios/arch/armv8m/earlyfault.c: raw output that works from reset on */
+void armv8m_debug_putc(char c)
+{
+    rp2350_uart0_write_byte((UBYTE)c);
 }
 
 BOOL rp2350_uart0_can_read(void)

@@ -839,6 +839,8 @@ const char * machine_name(void)
     return raspi_board.name;
 #elif defined(MACHINE_M548X)
     return m548x_machine_name();
+#elif defined(MACHINE_RP2350)
+    return "Waveshare RP2350-PiZero";
 #else
     return guess_machine_name();
 #endif

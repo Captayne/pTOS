@@ -73,8 +73,8 @@ void rp2350_int_init(void)
     SYST_CVR = 0;
     SYST_CSR = SYST_CSR_ENABLE | SYST_CSR_TICKINT | SYST_CSR_CLKSOURCE;
 
-    /* the USB console needs its interrupt */
-    rp2350_usbcon_init();
+    /* the USB console, polled until now, gets its interrupt */
+    rp2350_usbcon_attach_irq();
 }
 
 PFVOID rp2350_connect_irq(int irq, PFVOID handler)

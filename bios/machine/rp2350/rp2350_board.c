@@ -16,6 +16,8 @@
 #include "emutos.h"
 #include "rp2350.h"
 #include "rp2350_uart.h"
+#include "rp2350_usbcon.h"
+#include "rp2350_monitor.h"
 
 /* RESETS */
 #define RESETS_RESET        RP2350_REG(RP2350_RESETS_BASE + 0x00)
@@ -165,4 +167,28 @@ void rp2350_board_init(void)
           | RP2350_RESET_TIMER0 | RP2350_RESET_UART0 | RP2350_RESET_USBCTRL);
 
     rp2350_uart0_init();
+    rp2350_usbcon_init();
+#if CONF_WITH_RP2350_MONITOR
+    rp2350_monitor_init();
+#endif
+
+#ifdef RP2350_USB_SELFTEST
+    /* bring-up aid: prove clocks, USB and the console path on their own */
+    {
+        static const char msg[] = "pTOS RP2350: USB console self test\r\n";
+        ULONG n = 0;
+        const char *p;
+
+        for (;;)
+        {
+            rp2350_usbcon_poll();
+            if (++n == 3000000UL)
+            {
+                n = 0;
+                for (p = msg; *p; p++)
+                    rp2350_uart0_write_byte(*p);
+            }
+        }
+    }
+#endif
 }
