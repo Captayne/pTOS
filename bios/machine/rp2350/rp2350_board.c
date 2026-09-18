@@ -55,6 +55,7 @@
 #define CLK_PERI_DIV        RP2350_REG(RP2350_CLOCKS_BASE + 0x4c)
 #define CLK_USB_CTRL        RP2350_REG(RP2350_CLOCKS_BASE + 0x60)
 #define CLK_USB_DIV         RP2350_REG(RP2350_CLOCKS_BASE + 0x64)
+#define CLK_SYS_RESUS_CTRL  RP2350_REG(RP2350_CLOCKS_BASE + 0x84)
 #define CLK_REF_SRC_XOSC    0x2UL
 #define CLK_SYS_SRC_AUX     0x1UL
 #define CLK_PERI_ENABLE     0x800UL
@@ -79,11 +80,18 @@ static void unreset(ULONG bits)
         ;
 }
 
+/*
+ * The start-up delay is in units of 256 crystal cycles.  The pico-sdk
+ * allows 6 ms by default and 64 ms on boards with slow-starting crystals;
+ * this board only ever showed the difference on a cold start, where the
+ * crystal is not already running from the bootrom's USB boot.
+ */
+#define XOSC_STARTUP_MS     64
+
 static void xosc_init(void)
 {
     XOSC_CTRL = XOSC_CTRL_1_15MHZ;
-    /* startup delay in units of 256 crystal cycles: about 1 ms */
-    XOSC_STARTUP = ((RP2350_XOSC_HZ / 1000) + 128) / 256;
+    XOSC_STARTUP = (((RP2350_XOSC_HZ / 1000) + 128) / 256) * XOSC_STARTUP_MS;
     XOSC_CTRL = XOSC_CTRL_ENABLE | XOSC_CTRL_1_15MHZ;
     while (!(XOSC_STATUS & XOSC_STATUS_STABLE))
         ;
@@ -107,19 +115,32 @@ static void pll_init(ULONG pll, ULONG reset_bit, ULONG fbdiv, ULONG postdiv1, UL
     PLL_PWR_CLR(pll) = PLL_PWR_POSTDIVPD;
 }
 
+/* at least n cycles of whatever clk_sys currently is */
+static void spin(ULONG n)
+{
+    while (n--)
+        __asm__ volatile ("nop");
+}
+
+/*
+ * The same sequence as the pico-sdk's runtime_init_clocks(), which is
+ * known to work from a cold start.
+ */
 static void clocks_init(void)
 {
-    /* Run clk_sys from clk_ref (glitchless) while everything is changed */
-    CLK_SYS_CTRL &= ~CLK_SYS_SRC_AUX;
-    while (CLK_SYS_SELECTED != 0x1)
-        ;
+    /* a resuscitation left enabled by earlier software */
+    CLK_SYS_RESUS_CTRL = 0;
 
     xosc_init();
 
-    /* clk_ref from the crystal: 12 MHz */
-    CLK_REF_DIV = CLK_DIV_1;
-    CLK_REF_CTRL = CLK_REF_SRC_XOSC;
-    while (CLK_REF_SELECTED != (1UL << CLK_REF_SRC_XOSC))
+    /* switch clk_sys and clk_ref cleanly away from their aux sources
+     * (clk_sys to clk_ref, clk_ref to the ring oscillator) before the
+     * PLLs are touched */
+    CLK_SYS_CTRL &= ~0x3UL;
+    while (CLK_SYS_SELECTED != 0x1)
+        ;
+    CLK_REF_CTRL &= ~0x3UL;
+    while (CLK_REF_SELECTED != 0x1)
         ;
 
     /* PLL_SYS: 1500 MHz VCO / 5 / 2 = 150 MHz */
@@ -127,21 +148,34 @@ static void clocks_init(void)
     /* PLL_USB: 1200 MHz VCO / 5 / 5 = 48 MHz */
     pll_init(RP2350_PLL_USB_BASE, RP2350_RESET_PLL_USB, 100, 5, 5);
 
-    /* clk_sys from PLL_SYS: the aux source (bits 7:5) 0 is clksrc_pll_sys */
+    /* clk_ref from the crystal: 12 MHz */
+    CLK_REF_DIV = CLK_DIV_1;
+    CLK_REF_CTRL = (CLK_REF_CTRL & ~0x3UL) | CLK_REF_SRC_XOSC;
+    while (CLK_REF_SELECTED != (1UL << CLK_REF_SRC_XOSC))
+        ;
+
+    /* clk_sys from PLL_SYS: aux source (bits 7:5) 0 is clksrc_pll_sys; the
+     * aux mux is only changed while the glitchless mux is on clk_ref */
     CLK_SYS_DIV = CLK_DIV_1;
-    CLK_SYS_CTRL = CLK_SYS_SRC_AUX;
+    CLK_SYS_CTRL &= ~(0x7UL << 5);
+    CLK_SYS_CTRL |= CLK_SYS_SRC_AUX;
     while (CLK_SYS_SELECTED != (1UL << CLK_SYS_SRC_AUX))
         ;
 
-    /* clk_peri (UART, SPI) from clk_sys */
-    CLK_PERI_CTRL = 0;
-    CLK_PERI_DIV = CLK_DIV_1;
-    CLK_PERI_CTRL = CLK_PERI_ENABLE;
-
-    /* clk_usb from PLL_USB (aux source 0): 48 MHz */
-    CLK_USB_CTRL = 0;
+    /* clk_usb from PLL_USB (aux source 0), 48 MHz: stop the clock, wait
+     * for that to propagate, then change the source and restart */
+    CLK_USB_CTRL &= ~CLK_USB_ENABLE;
+    spin(3 * (RP2350_CLK_SYS_HZ / 48000000UL + 1));
+    CLK_USB_CTRL &= ~(0x7UL << 5);
+    CLK_USB_CTRL |= CLK_USB_ENABLE;
     CLK_USB_DIV = CLK_DIV_1;
-    CLK_USB_CTRL = CLK_USB_ENABLE;
+
+    /* clk_peri (UART, SPI) from clk_sys (aux source 0) */
+    CLK_PERI_CTRL &= ~CLK_PERI_ENABLE;
+    spin(3 * 2);
+    CLK_PERI_CTRL &= ~(0x7UL << 5);
+    CLK_PERI_CTRL |= CLK_PERI_ENABLE;
+    CLK_PERI_DIV = CLK_DIV_1;
 
     /* TIMER0 counts microseconds */
     TICKS_TIMER0_CYCLES = RP2350_XOSC_HZ / 1000000UL;

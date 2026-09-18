@@ -1,5 +1,5 @@
 /*
- * earlyfault.c - report a fault taken before the vector table is set up
+ * earlyfault.c - raw fault reports that do not depend on the console
  *
  * Copyright (C) 2026 The pTOS development team
  *
@@ -7,10 +7,15 @@
  * option any later version.  See doc/license.txt for details.
  *
  * bios/arch/armv8m/vectorsasm.S dispatches faults through the emulated 68k
- * vector table, which init_exc_vec() only fills in during biosmain().  A
- * fault before that would find a null vector and lock the core up.
- * Instead it comes here, and the registers are printed with nothing but
- * the machine's armv8m_debug_putc(), which has to work from reset on.
+ * vector table to any_vec() and dopanic(), which print through the
+ * console -- in handler mode, where a second fault can only lock the core
+ * up.  So every fault is first reported here with nothing but the
+ * machine's armv8m_debug_putc(), which works from reset on:
+ *
+ *  - armv8m_fault_report() runs before the regular handling.  A fault
+ *    while that is still going on is reported and stops the machine.
+ *  - armv8m_early_fault() takes the place of the regular handling when
+ *    the vector table is not set up yet (before init_exc_vec()).
  */
 
 #include "config.h"
@@ -38,11 +43,11 @@ static void putreg(const char *name, ULONG v)
 }
 
 /* frame: the exception_frame_t of bios/arch/arm/vectors.c */
-void armv8m_early_fault(int vector, ULONG *frame, ULONG fsr, ULONG far)
+static void dump(const char *what, int vector, ULONG *frame, ULONG fsr, ULONG far)
 {
     int i;
 
-    putstr("\r\n*** early fault, vector ");
+    putstr(what);
     puthex((ULONG)vector);
     putreg("\r\npc=", frame[15]);
     putreg(" lr=", frame[14]);
@@ -59,6 +64,22 @@ void armv8m_early_fault(int vector, ULONG *frame, ULONG fsr, ULONG far)
         putreg("=", frame[i]);
     }
     putstr("\r\n");
+}
 
+void armv8m_early_fault(int vector, ULONG *frame, ULONG fsr, ULONG far)
+{
+    dump("\r\n*** early fault, vector ", vector, frame, fsr, far);
     halt();
+}
+
+void armv8m_fault_report(int vector, ULONG *frame, ULONG fsr, ULONG far)
+{
+    static int nesting;
+
+    if (nesting++)
+    {
+        dump("\r\n*** fault while handling a fault, vector ", vector, frame, fsr, far);
+        halt();
+    }
+    dump("\r\n*** fault, vector ", vector, frame, fsr, far);
 }

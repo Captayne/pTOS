@@ -249,6 +249,13 @@ not_svc:
         ldr     r3, [r3]                // far
 
         mov     r1, sp
+        // Report the raw registers first, with nothing but the machine's
+        // raw output: if printing through the console faults again (the
+        // console is not built for handler mode), at least this got out.
+        // A fault during that report ends in armv8m_fault_report() too.
+        push    {r0-r3}
+        bl      C_SYM(armv8m_fault_report)
+        pop     {r0-r3}
         ldr     r12, =LOWMEM_BASE
         ldr     r12, [r12, r0]
         cmp     r12, #0                 // vector table not set up yet?

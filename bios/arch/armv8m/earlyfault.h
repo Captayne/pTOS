@@ -11,6 +11,7 @@
 #define EARLYFAULT_H
 
 void armv8m_early_fault(int vector, ULONG *frame, ULONG fsr, ULONG far);
+void armv8m_fault_report(int vector, ULONG *frame, ULONG fsr, ULONG far);
 
 /* provided by the machine: raw character output, usable from reset on */
 void armv8m_debug_putc(char c);
