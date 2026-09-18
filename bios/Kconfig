@@ -198,10 +198,18 @@ config CONF_WITH_IDE
 
 config CONF_WITH_SDMMC
 	bool "SD/MMC bus support"
-	default y if MACHINE_FIREBEE
+	default y if MACHINE_FIREBEE || MACHINE_RP2350
 	default n
 	help
 	  Support for SD and MMC cards attached to an SPI bus.
+
+config CONF_WITH_RP2350_SPI
+	bool "RP2350-PiZero microSD slot (SPI1)"
+	depends on MACHINE_RP2350 && CONF_WITH_SDMMC
+	default y
+	help
+	  The SPI primitives for the generic SD/MMC driver, on the SPI1 bus
+	  the microSD slot of the Waveshare RP2350-PiZero is wired to.
 
 config CONF_WITH_RASPI_EMMC
 	bool "Raspberry Pi EMMC (SD card) support"

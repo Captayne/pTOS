@@ -38,6 +38,7 @@
 #include "rp2350_int.h"
 #include "rp2350_usbcon.h"
 #include "ikbd.h"
+#include "iorec.h"
 #include "asm.h"
 #include "string.h"
 
@@ -183,6 +184,7 @@ static volatile BOOL usb_up;        /* rp2350_usbcon_init() has run */
 static volatile BOOL configured;
 static volatile BOOL dtr;           /* a terminal has the port open */
 static volatile BOOL tx_busy;
+volatile BOOL rp2350_usbcon_break;  /* the host sent a break (monitor) */
 static BOOL in_poll;
 
 static UBYTE pending_addr;
@@ -442,6 +444,8 @@ static void handle_setup(void)
                 tx_kick();
             return;
         case CDC_SEND_BREAK:
+            if (value)
+                rp2350_usbcon_break = TRUE;
             ep0_send_zlp();
             return;
         }
@@ -450,27 +454,68 @@ static void handle_setup(void)
     ep0_stall();
 }
 
-static void rx_bytes(void)
-{
-    ULONG ctrl = BUF_CTRL(EP2_OUT_BUF_CTRL);
-    UWORD len = ctrl & BUF_LEN_MASK;
-    volatile UBYTE *buf = DPRAM_PTR(EP2_OUT_BUF);
-    UWORD i;
+/*
+ * Received data is handed on from the endpoint buffer only as far as there
+ * is room for it.  Until the whole packet is gone the endpoint stays
+ * unarmed, so the host gets NAKs and holds back further data: flow
+ * control, instead of losing what the console cannot take yet.  The rest
+ * is handed on from the system timer (rp2350_usbcon_timer()).
+ */
+static UWORD rx_len, rx_pos;        /* packet waiting in the OUT buffer */
+static BOOL rx_waiting;
 
-    for (i = 0; i < len; i++)
-    {
+static BOOL rx_room(void)
+{
 #if CONF_SERIAL_CONSOLE
-        push_ascii_ikbdiorec(buf[i]);
+    /* one more 4-byte record must fit into the keyboard IOREC */
+    WORD tail = ikbdiorec.tail + 4;
+
+    if (tail >= ikbdiorec.size)
+        tail = 0;
+    return tail != ikbdiorec.head;
 #else
-        UWORD next = (rx_head + 1) % RX_RING_SIZE;
-        if (next != rx_tail)
-        {
-            rx_ring[rx_head] = buf[i];
-            rx_head = next;
-        }
+    return (rx_head + 1) % RX_RING_SIZE != rx_tail;
+#endif
+}
+
+static void rx_drain(void)
+{
+    volatile UBYTE *buf = DPRAM_PTR(EP2_OUT_BUF);
+
+    while (rx_pos < rx_len && rx_room())
+    {
+        UBYTE c = buf[rx_pos++];
+#if CONF_SERIAL_CONSOLE
+        push_ascii_ikbdiorec(c);
+#else
+        rx_ring[rx_head] = c;
+        rx_head = (rx_head + 1) % RX_RING_SIZE;
 #endif
     }
+    if (rx_pos < rx_len)
+        return;                     /* no room: keep NAKing the host */
+
+    rx_waiting = FALSE;
     rx_arm();
+}
+
+static void rx_bytes(void)
+{
+    rx_len = BUF_CTRL(EP2_OUT_BUF_CTRL) & BUF_LEN_MASK;
+    rx_pos = 0;
+    rx_waiting = TRUE;
+    rx_drain();
+}
+
+/* from the 200 Hz system timer: hand on what is left of a packet */
+void rp2350_usbcon_timer(void)
+{
+    if (rx_waiting && configured)
+    {
+        in_poll = TRUE;
+        rx_drain();
+        in_poll = FALSE;
+    }
 }
 
 static void usb_service(void)
@@ -532,8 +577,11 @@ static void usb_service(void)
             USB_REG(BUFF_STATUS) = EP2_OUT_BIT;
             rx_bytes();
         }
-        /* anything else (EP1 IN is never used) */
-        status = USB_REG(BUFF_STATUS);
+        /* Anything else (EP1 IN is never used).  Only the bits read
+         * above: re-reading BUFF_STATUS here would also clear a buffer
+         * that completed in the meantime without handling it, leaving its
+         * endpoint dead (an OUT buffer never re-armed, tx_busy stuck). */
+        status &= ~(EP0_IN_BIT | EP0_OUT_BIT | EP2_IN_BIT | EP2_OUT_BIT);
         if (status)
             USB_REG(BUFF_STATUS) = status;
     }
@@ -544,6 +592,7 @@ static void usb_service(void)
         USB_REG(ADDR_ENDP) = 0;
         configured = FALSE;
         dtr = FALSE;
+        rx_waiting = FALSE;
         tx_busy = FALSE;
         set_addr_pending = FALSE;
         ep0_tx_ptr = NULL;
@@ -609,6 +658,7 @@ UBYTE rp2350_usbcon_getc(void)
         rp2350_usbcon_poll();
     c = rx_ring[rx_tail];
     rx_tail = (rx_tail + 1) % RX_RING_SIZE;
+    rp2350_usbcon_timer();          /* there is room again */
 
     return c;
 }

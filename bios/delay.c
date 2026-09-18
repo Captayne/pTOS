@@ -56,6 +56,8 @@ void init_delay(void)
 {
 #if defined (MACHINE_FIREBEE) || defined (MACHINE_M548X)
     loopcount_1_msec = SDCLK_FREQUENCY_MHZ * 1000UL;
+#elif defined(MACHINE_RP2350)
+    loopcount_1_msec = 1000UL;  /* delay_loop() counts microseconds */
 #else
 # if CONF_WITH_APOLLO_68080
     if (is_apollo_68080)

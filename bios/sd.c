@@ -73,7 +73,11 @@
 #define msec_to_ticks(msec)     ((msec*CLOCKS_PER_SEC+999)/1000)
                             /* these are byte-count timeout values */
 #define SD_CMD_TIMEOUT          8       /* between sending crc & receiving response */
-#define SD_CSD_TIMEOUT          8       /* between sending SEND_CSD cmd & receiving data */
+/* The SD specification allows 8 bytes (NCX) between SEND_CSD and its data,
+ * but some SDHC cards take longer in SPI mode.  Every CSD read that times
+ * out is taken for a media change (see GET_MEDIACHANGE), so be generous:
+ * this only costs anything when a card really is gone. */
+#define SD_CSD_TIMEOUT          256     /* between sending SEND_CSD cmd & receiving data */
                             /* these are millisecond timeout values (see SD specifications v4.10) */
 #define SD_POWERUP_DELAY_MSEC   1       /* minimum power-up time */
 #define SD_INIT_TIMEOUT_MSEC    1000    /* waiting for card to become ready */

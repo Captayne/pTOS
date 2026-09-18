@@ -29,9 +29,28 @@
 #define RP2350_PLL_SYS_BASE     0x40050000
 #define RP2350_PLL_USB_BASE     0x40058000
 #define RP2350_UART0_BASE       0x40070000
+#define RP2350_SPI1_BASE        0x40088000
 #define RP2350_TIMER0_BASE      0x400b0000
 #define RP2350_WATCHDOG_BASE    0x400d8000
 #define RP2350_TICKS_BASE       0x40108000
+
+/* Single-cycle I/O: GPIO registers for GPIO0-31 and GPIO32-47 ("HI") */
+#define RP2350_SIO_BASE         0xd0000000
+#define RP2350_SIO_GPIO_IN          (RP2350_SIO_BASE + 0x04)
+#define RP2350_SIO_GPIO_HI_IN       (RP2350_SIO_BASE + 0x08)
+#define RP2350_SIO_GPIO_OUT_SET     (RP2350_SIO_BASE + 0x18)
+#define RP2350_SIO_GPIO_HI_OUT_SET  (RP2350_SIO_BASE + 0x1c)
+#define RP2350_SIO_GPIO_OUT_CLR     (RP2350_SIO_BASE + 0x20)
+#define RP2350_SIO_GPIO_HI_OUT_CLR  (RP2350_SIO_BASE + 0x24)
+#define RP2350_SIO_GPIO_OE_SET      (RP2350_SIO_BASE + 0x38)
+#define RP2350_SIO_GPIO_HI_OE_SET   (RP2350_SIO_BASE + 0x3c)
+#define RP2350_SIO_GPIO_OE_CLR      (RP2350_SIO_BASE + 0x40)
+#define RP2350_SIO_GPIO_HI_OE_CLR   (RP2350_SIO_BASE + 0x44)
+
+/* GPIO function select values */
+#define RP2350_GPIO_FUNC_SPI    1
+#define RP2350_GPIO_FUNC_UART   2
+#define RP2350_GPIO_FUNC_SIO    5
 
 /* Cortex-M33 private peripherals */
 #define ARMV8M_SYST_CSR         0xe000e010      /* SysTick control and status */
@@ -73,6 +92,7 @@
 #define RP2350_RESET_PADS_BANK0 (1UL << 9)
 #define RP2350_RESET_PLL_SYS    (1UL << 14)
 #define RP2350_RESET_PLL_USB    (1UL << 15)
+#define RP2350_RESET_SPI1       (1UL << 19)
 #define RP2350_RESET_TIMER0     (1UL << 23)
 #define RP2350_RESET_UART0      (1UL << 26)
 #define RP2350_RESET_USBCTRL    (1UL << 28)
@@ -88,6 +108,7 @@
 
 void rp2350_board_init(void);
 void rp2350_gpio_set_function(int gpio, int func);
+void rp2350_gpio_pull_up(int gpio);
 
 #endif /* ASM_SOURCE */
 
