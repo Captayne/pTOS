@@ -34,6 +34,9 @@
 #include "biosext.h"
 #include "version.h"
 #include "lineavars.h"
+#if CONF_WITH_RP2350_RTX
+#include "rp2350_rtx.h"
+#endif
 
 #include "initinfo.h"
 #include "conout.h"
@@ -292,7 +295,7 @@ WORD initinfo(ULONG *pshiftbits)
      * lines each, six 'pair' lines, two messages, a blank line, and the
      * final inverse line.  Define ENABLE_KDEBUG to check the total.
      */
-    int initinfo_height = LOGO_HEIGHT + INITINFO_BASE_HEIGHT;
+    int initinfo_height = LOGO_HEIGHT + INITINFO_BASE_HEIGHT + CONF_WITH_RP2350_RTX;
     int top_margin;
 #ifdef ENABLE_KDEBUG
     int actual_initinfo_height;
@@ -362,6 +365,9 @@ WORD initinfo(ULONG *pshiftbits)
 
     pair_start(_("Machine")); cprintf(machine_name()); pair_end();
     pair_start("ST-RAM"); cprintf_bytesize(stramsize); pair_end();
+#if CONF_WITH_RP2350_RTX
+    pair_start("Real-time core"); cprintf(rp2350_rtx_name()); pair_end();
+#endif
 
 #if CONF_WITH_ALT_RAM
     if (altramsize > 0) {

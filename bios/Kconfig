@@ -448,6 +448,17 @@ config CONF_WITH_RP2350_UART
 	  Use UART0 of the RP2350 (GPIO0 TX, GPIO1 RX, 115200 8N1) as the
 	  serial console.
 
+config CONF_WITH_RP2350_RTX
+	bool "RP2350 real-time extension (core 1)"
+	depends on MACHINE_RP2350
+	default y
+	help
+	  Start the real-time runtime found in flash at 0x10800000 on the
+	  second core, and let programs run real-time tasks on it through
+	  the "_RTX" cookie (include/rtx.h).  The top 64 KB of SRAM are
+	  given to core 1.  Without a runtime image in flash nothing
+	  happens, apart from the smaller memory.
+
 config CONF_WITH_RP2350_MONITOR
 	bool "RP2350 bring-up monitor (heartbeat NMI)"
 	depends on MACHINE_RP2350

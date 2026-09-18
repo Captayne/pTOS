@@ -12,7 +12,10 @@
 # RP2350 ARM Secure family ID, which is what the bootrom's BOOTSEL drive
 # expects for an image executed in place from flash.
 #
-# Usage: elf2uf2.py input.elf output.uf2
+# Usage: elf2uf2.py input.elf [input2.elf ...] output.uf2
+#
+# Several inputs are merged into one UF2 file (e.g. pTOS plus the real-time
+# runtime for core 1); they must not overlap.
 #
 
 import struct
@@ -63,11 +66,17 @@ def build_pages(segments):
 
 
 def main():
-    if len(sys.argv) != 3:
-        sys.exit("usage: elf2uf2.py input.elf output.uf2")
-    with open(sys.argv[1], "rb") as f:
-        data = f.read()
-    pages = build_pages(load_segments(data))
+    if len(sys.argv) < 3:
+        sys.exit("usage: elf2uf2.py input.elf [input2.elf ...] output.uf2")
+    segments = []
+    for name in sys.argv[1:-1]:
+        with open(name, "rb") as f:
+            segments += load_segments(f.read())
+    segments.sort()
+    for (a, da), (b, _) in zip(segments, segments[1:]):
+        if a + len(da) > b:
+            sys.exit("elf2uf2: segments at 0x%08x and 0x%08x overlap" % (a, b))
+    pages = build_pages(segments)
     addrs = sorted(pages)
     out = bytearray()
     for n, addr in enumerate(addrs):
@@ -76,9 +85,9 @@ def main():
                              len(addrs), RP2350_ARM_S_FAMILY_ID)
         payload = bytes(pages[addr]) + bytes(476 - PAGE_SIZE)
         out += header + payload + struct.pack("<I", UF2_MAGIC_END)
-    with open(sys.argv[2], "wb") as f:
+    with open(sys.argv[-1], "wb") as f:
         f.write(out)
-    print("# %s: %d blocks, 0x%08x-0x%08x" % (sys.argv[2], len(addrs),
+    print("# %s: %d blocks, 0x%08x-0x%08x" % (sys.argv[-1], len(addrs),
           addrs[0], addrs[-1] + PAGE_SIZE))
 
 

@@ -14,6 +14,7 @@
 
 #include "asmdefs.h"
 #include "rp2350.h"
+#include "rtx_rp2350.h"
 
         .globl  C_SYM(rp2350_reset)
         .globl  C_SYM(main)
@@ -115,9 +116,14 @@ ASM_FUNC(main):
 
         bl      C_SYM(rp2350_board_init) // clocks, resets, console UART
 
-        // top of ST-RAM
+        // top of ST-RAM; with the real-time extension, core 1 owns the
+        // SRAM from RTX_RAM_BASE up
         ldr     r0, =C_SYM(phystop)
+#if CONF_WITH_RP2350_RTX
+        ldr     r1, =RTX_RAM_BASE
+#else
         ldr     r1, =RP2350_SRAM_BASE + RP2350_SRAM_SIZE
+#endif
         str     r1, [r0]
 
         ldr     r0, =C_SYM(stktop)

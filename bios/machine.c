@@ -42,6 +42,9 @@
 #include "dma.h"
 #include "nova.h"
 #include "biosext.h"
+#if CONF_WITH_RP2350_RTX
+#include "rp2350_rtx.h"
+#endif
 #ifdef MACHINE_AMIGA
 #include "amiga.h"
 #endif
@@ -799,6 +802,11 @@ void fill_cookie_jar(void)
     /* Set the _5MS cookie with the address of the 200 Hz system timer
      * interrupt vector so FreeMiNT can hook it. */
     cookie_add(COOKIE__5MS, (ULONG)&vector_5ms);
+#endif
+
+#if CONF_WITH_RP2350_RTX
+    /* starts core 1 and adds the _RTX cookie */
+    rp2350_rtx_init();
 #endif
 }
 
