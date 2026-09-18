@@ -119,6 +119,7 @@ void rp2350_irq_handler(void)
 void rp2350_systick_handler(void)
 {
     rp2350_uart0_poll_rx();
+    rp2350_usbcon_timer();
 
     if (vector_5ms)
         vector_5ms();

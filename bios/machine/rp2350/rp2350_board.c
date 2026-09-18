@@ -18,6 +18,7 @@
 #include "rp2350_uart.h"
 #include "rp2350_usbcon.h"
 #include "rp2350_monitor.h"
+#include "asm.h"
 
 /* RESETS */
 #define RESETS_RESET        RP2350_REG(RP2350_RESETS_BASE + 0x00)
@@ -147,6 +148,19 @@ static void clocks_init(void)
     TICKS_TIMER0_CTRL = 1;
 }
 
+/* TIMER0, running at 1 MHz (see clocks_init()) */
+#define TIMER0_TIMERAWL     RP2350_REG(RP2350_TIMER0_BASE + 0x28)
+
+/* delay_loop() on ARMv8-M (include/arch/arm/asm.h): wait count
+ * microseconds; init_delay() sets loopcount_1_msec to 1000 */
+void armv8m_delay(ULONG count)
+{
+    ULONG start = TIMER0_TIMERAWL;
+
+    while (TIMER0_TIMERAWL - start < count)
+        ;
+}
+
 void rp2350_gpio_set_function(int gpio, int func)
 {
     ULONG pad = PADS_GPIO(gpio);
@@ -159,12 +173,21 @@ void rp2350_gpio_set_function(int gpio, int func)
     PADS_GPIO(gpio) = pad & ~PADS_ISO;
 }
 
+/* enable the pull-up (and disable the pull-down) of a pad */
+#define PADS_PUE            0x008UL
+#define PADS_PDE            0x004UL
+void rp2350_gpio_pull_up(int gpio)
+{
+    PADS_GPIO(gpio) = (PADS_GPIO(gpio) & ~PADS_PDE) | PADS_PUE;
+}
+
 void rp2350_board_init(void)
 {
     clocks_init();
 
     unreset(RP2350_RESET_IO_BANK0 | RP2350_RESET_PADS_BANK0
-          | RP2350_RESET_TIMER0 | RP2350_RESET_UART0 | RP2350_RESET_USBCTRL);
+          | RP2350_RESET_TIMER0 | RP2350_RESET_UART0 | RP2350_RESET_USBCTRL
+          | RP2350_RESET_SPI1);
 
     rp2350_uart0_init();
     rp2350_usbcon_init();

@@ -642,6 +642,10 @@ void screen_init_mode(void)
      * sweeps far past the framebuffer into peripheral I/O space. */
     raspi_screen_init();
     initialise_palette_registers(0,0);
+#elif defined(MACHINE_RP2350)
+    /* ST high (640x400 monochrome): 80 columns for the serial console,
+     * and the mode the RP2350 video output is going to show */
+    sshiftmod = ST_HIGH;
 #endif /* CONF_WITH_ATARI_VIDEO */
 #if CONF_WITH_VIRTIO_GPU
     virtio_gpu_init();

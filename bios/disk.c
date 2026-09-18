@@ -111,7 +111,8 @@ static LONG natfeats_inquire(UWORD unit, ULONG *blocksize, ULONG *deviceflags, c
 #endif
 static LONG internal_inquire(UWORD unit, ULONG *blocksize, ULONG *deviceflags, char *productname, UWORD stringlen);
 
-#if CONF_WITH_IDE || CONF_WITH_SCSI || CONF_WITH_ARANYM || CONF_WITH_ACSI || CONF_WITH_SDMMC
+#if (CONF_WITH_IDE || CONF_WITH_SCSI || CONF_WITH_ARANYM || CONF_WITH_ACSI || CONF_WITH_SDMMC) \
+    && ARCH_M68K   /* root sectors hold m68k code (see CONF_WITH_BOOT_SECTOR) */
 /* scan disk majors in the following order */
 static const int majors[] =
 {
@@ -161,7 +162,8 @@ static void dmaboot(UWORD unit, void *bootcode)
  */
 void disk_try_dmaboot(void)
 {
-#if CONF_WITH_IDE || CONF_WITH_SCSI || CONF_WITH_ARANYM || CONF_WITH_ACSI || CONF_WITH_SDMMC
+#if (CONF_WITH_IDE || CONF_WITH_SCSI || CONF_WITH_ARANYM || CONF_WITH_ACSI || CONF_WITH_SDMMC) \
+    && ARCH_M68K
     UWORD i;
     LONG rc;
 

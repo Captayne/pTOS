@@ -13,7 +13,8 @@
  * 10 ms: it keeps the USB console going regardless, and once a second it
  * prints where the interrupted code was -- but only while the system is
  * stuck: inside an exception handler, or with interrupts masked, for more
- * than a second.  A healthy system never shows a line.  This is only
+ * than a second.  A healthy system never shows a line.  A break sent by
+ * the terminal program asks for one report on the spot.  This is only
  * meant for bringing up the port (CONF_WITH_RP2350_MONITOR).
  */
 
@@ -63,8 +64,9 @@ void rp2350_monitor_nmi(ULONG *frame)
             stuck_ticks = 0;
     }
 
-    if (stuck_ticks && stuck_ticks % REPORT_EVERY == 0)
+    if ((stuck_ticks && stuck_ticks % REPORT_EVERY == 0) || rp2350_usbcon_break)
     {
+        rp2350_usbcon_break = FALSE;
         mon_puts("\r\n[mon] pc=");
         mon_puthex(frame[6]);
         mon_puts(" lr=");

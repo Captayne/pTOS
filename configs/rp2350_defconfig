@@ -17,9 +17,9 @@ CONF_WITH_XHDI=n
 # with the video phase.
 CONF_WITH_AES=n
 
-# Kernel debug output (kprintf, KINFO) goes to the console UART, which
-# also feeds the USB console.
-DEBUG_PRINT_RS232=y
+# Kernel debug output (kprintf, KINFO) is off, so that it does not mix
+# with the console.  For debugging, DEBUG_PRINT_RS232=y sends it to the
+# console UART, which also feeds the USB console.
 
 # Bring-up: heartbeat NMI keeps the USB console alive and reports the PC.
 CONF_WITH_RP2350_MONITOR=y

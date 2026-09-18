@@ -188,9 +188,19 @@ extern void enable_interrupts(void);
  * Loops for the specified count; for a 1 millisecond delay on the
  * current system, use the value in the global 'loopcount_1_msec'.
  */
+#ifdef __ARM_ARCH_8M_MAIN__
+/*
+ * ARMv8-M: the machine provides an exact busy wait instead of a counted
+ * loop, and init_delay() sets loopcount_1_msec to match its unit.
+ */
+extern void armv8m_delay(ULONG count);
+#define delay_loop(count) armv8m_delay(count)
+#else
  #define delay_loop(count) __extension__ \
  ({                                      \
    ULONG _count = (count);             \
    while(_count) {_count--;}           \
  })
+#endif /* __ARM_ARCH_8M_MAIN__ */
+
 #endif /* ASM_H */
