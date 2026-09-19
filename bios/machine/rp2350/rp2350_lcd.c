@@ -11,8 +11,8 @@
  * but smaller.  The display wants 16 bits per pixel over SPI, so a PIO
  * state machine turns every framebuffer bit into 16 SPI clocks of either
  * black or white, fed by DMA from the framebuffer.  A whole frame goes
- * out about 25 times a second without any CPU time; the system timer
- * only starts the next frame when the previous one is done.
+ * out about 7 times a second (SPI at 9.4 MHz) without any CPU time; the
+ * system timer only starts the next frame when the previous one is done.
  *
  * The touch controller is polled every 10 ms on SPI0 and drives the
  * mouse: position through relative IKBD mouse packets towards the touched
@@ -119,7 +119,8 @@ static const UWORD lcd_prog[] = {
     0x1082      /* 3: jmp y--, 2        side 1  ; SCK high               */
 };
 #define PROG_LEN    4
-#define PIO_CLKDIV  2           /* 75 MHz PIO clock: 37.5 MHz SPI */
+#define PIO_CLKDIV  8           /* 18.75 MHz PIO clock: 9.4 MHz SPI, the
+                                 * ILI9341 write clock limit is 10 MHz */
 
 /* touch calibration: raw XPT2046 readings at the screen edges */
 #define TOUCH_X_LEFT    3800
@@ -142,6 +143,16 @@ static void pins_to(int func)
     rp2350_gpio_set_function(LCD_MOSI, func);
 }
 
+/* about 250 ns at 150 MHz: plenty for the ILI9341 (write cycle >= 100 ns),
+ * even through loose wires */
+static void bb_wait(void)
+{
+    int n;
+
+    for (n = 12; n; n--)
+        __asm__ volatile ("nop");
+}
+
 static void bb_byte(UBYTE b)
 {
     int i;
@@ -152,10 +163,12 @@ static void bb_byte(UBYTE b)
             SIO_OUT_SET = BIT(LCD_MOSI);
         else
             SIO_OUT_CLR = BIT(LCD_MOSI);
+        bb_wait();
         SIO_OUT_SET = BIT(LCD_SCK);
-        __asm__ volatile ("nop\n\tnop\n\tnop\n\tnop");
+        bb_wait();
         SIO_OUT_CLR = BIT(LCD_SCK);
     }
+    bb_wait();
 }
 
 static void lcd_cmd(UBYTE cmd, const UBYTE *data, int len)
