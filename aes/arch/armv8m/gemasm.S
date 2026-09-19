@@ -158,6 +158,8 @@ ASM_FUNC(switchto):
 
         .bss
         .balign 8
-        .space  0x800                   // interrupts run on it too
+        .globl  C_SYM(gemasm_stack_bottom)  // for the bring-up monitor
+C_SYM(gemasm_stack_bottom):
+        .space  0x800
 gemasm_stack:
         .space  8

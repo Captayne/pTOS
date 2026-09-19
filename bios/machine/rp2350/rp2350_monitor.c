@@ -27,6 +27,10 @@
 #include "rp2350_usbcon.h"
 #include "rp2350_monitor.h"
 #include "tosvars.h"
+#if CONF_WITH_RP2350_LCD
+#include "lineavars.h"
+#include "rp2350_lcd.h"
+#endif
 
 #define TIMER0_TIMERAWL     RP2350_REG(RP2350_TIMER0_BASE + 0x28)
 #define TIMER0_ALARM0       RP2350_REG(RP2350_TIMER0_BASE + 0x10)
@@ -72,6 +76,37 @@ static void mon_dump_fb(void)
 }
 #endif
 
+/* free bytes at the bottom of a zero-initialised stack, for stack sizing */
+static ULONG stack_free(const ULONG *bottom, ULONG size)
+{
+    ULONG n;
+
+    for (n = 0; n < size / 4 && bottom[n] == 0; n++)
+        ;
+    return n * 4;
+}
+
+extern ULONG irq_stack_bottom[];
+#if CONF_WITH_AES
+extern ULONG gemasm_stack_bottom[];
+LONG aes_stack_free(int i);
+#endif
+
+static void mon_stacks(void)
+{
+    mon_puts("[stack free] irq=");
+    mon_puthex(stack_free(irq_stack_bottom, 4096));
+#if CONF_WITH_AES
+    mon_puts(" disp=");
+    mon_puthex(stack_free(gemasm_stack_bottom, 0x800));
+    mon_puts(" aes0=");
+    mon_puthex(aes_stack_free(0));
+    mon_puts(" aes1=");
+    mon_puthex(aes_stack_free(1));
+#endif
+    mon_puts("\r\n");
+}
+
 /* called from rp2350_nmi_entry (startup.S) with the interrupted frame */
 void rp2350_monitor_nmi(ULONG *frame)
 {
@@ -98,7 +133,17 @@ void rp2350_monitor_nmi(ULONG *frame)
         mon_puts(" xpsr=");
         mon_puthex(frame[7]);
         mon_puts("\r\n");
+        mon_stacks();
 #if CONF_WITH_RP2350_LCD
+        mon_puts("[touch] raw x=");
+        mon_puthex(rp2350_lcd_touch_raw_x);
+        mon_puts(" y=");
+        mon_puthex(rp2350_lcd_touch_raw_y);
+        mon_puts(" mouse x=");
+        mon_puthex((UWORD)linea_vars.GCURX);
+        mon_puts(" y=");
+        mon_puthex((UWORD)linea_vars.GCURY);
+        mon_puts("\r\n");
         if (!stuck_ticks)
             mon_dump_fb();
 #endif

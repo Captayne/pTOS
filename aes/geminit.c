@@ -142,6 +142,31 @@ GLOBAL THEGLO   D;
 /* Prototypes: */
 extern void accdesk_start(void) NORETURN;   /* see gemstart.S */
 
+#if CONF_WITH_RP2350_MONITOR
+/*
+ * Bring-up aid: the free space left at the bottom of the private stack of
+ * AES process i (0 or 1, the internal ones) at its deepest use so
+ * far, in bytes.  THEGLO is cleared at start-up, so the untouched bottom
+ * of a stack is the run of zero words there.  Returns -1 when there is no
+ * such process.  Called by the monitor (bios/machine/rp2350).
+ */
+LONG aes_stack_free(int i);
+LONG aes_stack_free(int i)
+{
+    UDA *u;
+    LONG n;
+
+    if (i < 2)
+        u = &D.g_int[i].a_uda;
+    else
+        return -1;              /* accessories: not yet */
+
+    for (n = 0; n < AES_STACK_SIZE && u->u_super[n] == 0; n++)
+        ;
+    return n * sizeof(ULONG);
+}
+#endif
+
 /*
  *  called from startup code to initialise the process 0 supervisor stack ptr:
  *      1. determines the end of the supervisor stack
