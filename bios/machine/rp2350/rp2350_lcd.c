@@ -11,7 +11,7 @@
  * but smaller.  The display wants 16 bits per pixel over SPI, so a PIO
  * state machine turns every framebuffer bit into 16 SPI clocks of either
  * black or white, fed by DMA from the framebuffer.  A whole frame goes
- * out about 7 times a second (SPI at 9.4 MHz) without any CPU time; the
+ * out about 20 times a second (SPI at 25 MHz) without any CPU time; the
  * system timer only starts the next frame when the previous one is done.
  *
  * The touch controller is polled every 10 ms on SPI0 and drives the
@@ -123,8 +123,10 @@ static const UWORD lcd_prog[] = {
     0x1082      /* 3: jmp y--, 2        side 1  ; SCK high               */
 };
 #define PROG_LEN    4
-#define PIO_CLKDIV  8           /* 18.75 MHz PIO clock: 9.4 MHz SPI, the
-                                 * ILI9341 write clock limit is 10 MHz */
+#define PIO_CLKDIV  3           /* 50 MHz PIO clock: 25 MHz SPI.  The
+                                 * ILI9341 is specified for 10 MHz writes,
+                                 * but takes much more; 37.5 MHz failed
+                                 * (together with too fast commands) */
 
 /*
  * Touch calibration (see include/touch.h), until a program or the boot
