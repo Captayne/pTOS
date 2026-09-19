@@ -82,6 +82,9 @@
 #endif
 #ifdef MACHINE_RP2350
 #include "rp2350_int.h"
+#if CONF_WITH_RP2350_LCD
+#include "rp2350_lcd.h"
+#endif
 #endif
 #ifdef MACHINE_VIRT_M68K
 #include "goldfish_pic.h"
@@ -650,6 +653,11 @@ static void bios_init(void)
     KDEBUG(("calibrate_delay()\n"));
     calibrate_delay();  /* determine values for delay() function */
                         /*  - requires interrupts to be enabled  */
+
+#if CONF_WITH_RP2350_LCD
+    /* a finger on the touch screen at boot: calibrate it by hand */
+    rp2350_lcd_boot_calibration();
+#endif
 
     /* Initialize the DSP.  Since we currently use the system timer
      * in dsp_execboot(), which is called from dsp_init(), the latter

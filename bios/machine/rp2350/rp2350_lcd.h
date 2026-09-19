@@ -13,6 +13,7 @@
 void rp2350_lcd_init(void);
 void rp2350_lcd_tick(void);
 void rp2350_lcd_get_mode(UWORD *planes, UWORD *hz_rez, UWORD *vt_rez);
+void rp2350_lcd_boot_calibration(void);
 void armv8m_delay(ULONG count);
 
 /* last raw touch readings, for calibration */
