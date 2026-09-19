@@ -261,6 +261,22 @@ SECTIONS
         C_SYM(_edata) = __edata;
     } >REGION_READ_ONLY
 
+#if defined (MACHINE_RP2350)
+    /* Code that must not run from the flash, because it is what erases and
+     * programs it (execution from flash stops meanwhile).  Stored in flash
+     * after .data, copied into SRAM by startup.S -- after the BSS has been
+     * cleared, since this section lies inside the cleared range.
+     */
+    .ramtext : MIN_SUBALIGN
+    {
+         __ramtext = .;
+        *(.ramtext .ramtext.*)
+        . = ALIGN(4);
+         __eramtext = .;
+    } >REGION_READ_WRITE AT>REGION_READ_ONLY
+     __ramtext_load = LOADADDR(.ramtext);
+#endif
+
     /* The BSS segment contains uninitialized global variables.
      * It will be cleared by the startup code.
      */

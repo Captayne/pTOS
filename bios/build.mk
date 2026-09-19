@@ -60,6 +60,7 @@ obj-$(CONF_WITH_RP2350_MONITOR) += rp2350_monitor.o
 obj-$(CONF_WITH_RP2350_SPI) += rp2350_spi.o
 obj-$(CONF_WITH_RP2350_RTX) += rp2350_rtx.o
 obj-$(CONF_WITH_RP2350_LCD) += rp2350_lcd.o
+obj-$(CONF_WITH_RP2350_FLASHDISK) += rp2350_flash.o rp2350_flashdisk.o
 
 # ARMv8-M replacements for what the A-profile code does with CPSR modes.
 obj-$(ARCH_ARMV8M) += super.o earlyfault.o

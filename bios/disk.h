@@ -29,7 +29,9 @@ enum bus_number {
     IDE_BUS = 2,
     SDMMC_BUS = 3,
     VIRTIO_BUS = 4,
-    MAX_BUS = CONF_WITH_VIRTIO_BLK ? VIRTIO_BUS :
+    FLASHDISK_BUS = 5,
+    MAX_BUS = CONF_WITH_RP2350_FLASHDISK ? FLASHDISK_BUS :
+              CONF_WITH_VIRTIO_BLK ? VIRTIO_BUS :
               (CONF_WITH_SDMMC || CONF_WITH_RASPI_EMMC) ? SDMMC_BUS :
               CONF_WITH_IDE ? IDE_BUS :
               CONF_WITH_SCSI ? SCSI_BUS : ACSI_BUS
@@ -45,6 +47,7 @@ enum bus_number {
 #define IS_IDE_DEVICE(major)    (GET_BUS(major) == IDE_BUS)
 #define IS_SDMMC_DEVICE(major)  (GET_BUS(major) == SDMMC_BUS)
 #define IS_VIRTIO_DEVICE(major) (GET_BUS(major) == VIRTIO_BUS)
+#define IS_FLASHDISK_DEVICE(major) (GET_BUS(major) == FLASHDISK_BUS)
 
 #define GET_UNITNUM(bus,dev)    (NUMFLOPPIES+(DEVICES_PER_BUS*(bus))+dev)
 
