@@ -15,6 +15,7 @@
 #include "emutos.h"
 #include "asm.h"
 #include "intmath.h"
+#include "endian.h"
 #include "asm.h"
 
 #include "tosvars.h"
@@ -840,12 +841,13 @@ void direct_screen_blit(WORD count, WORD *str)
         for (planes = linea_vars.v_planes; planes > 0; planes--)
         {
             UBYTE *p, *q;
+            UBYTE *d = SCREEN_BYTE(dst);     /* see endian.h */
 
             switch(mode) {
             default:    /* WM_REPLACE */
                 if (forecol & 1)
                 {
-                    for (n = height, p = src, q = dst; n > 0; n--)
+                    for (n = height, p = src, q = d; n > 0; n--)
                     {
                         *q = *p;
                         p += src_width;
@@ -854,7 +856,7 @@ void direct_screen_blit(WORD count, WORD *str)
                 }
                 else
                 {
-                    for (n = height, q = dst; n > 0; n--)
+                    for (n = height, q = d; n > 0; n--)
                     {
                         *q = 0;
                         q += dst_width;
@@ -864,7 +866,7 @@ void direct_screen_blit(WORD count, WORD *str)
             case WM_TRANS:
                 if (forecol & 1)
                 {
-                    for (n = height, p = src, q = dst; n > 0; n--)
+                    for (n = height, p = src, q = d; n > 0; n--)
                     {
                         *q |= *p;
                         p += src_width;
@@ -873,7 +875,7 @@ void direct_screen_blit(WORD count, WORD *str)
                 }
                 else
                 {
-                    for (n = height, p = src, q = dst; n > 0; n--)
+                    for (n = height, p = src, q = d; n > 0; n--)
                     {
                         *q &= ~*p;
                         p += src_width;
@@ -882,7 +884,7 @@ void direct_screen_blit(WORD count, WORD *str)
                 }
                 break;
             case WM_XOR:
-                for (n = height, p = src, q = dst; n > 0; n--)
+                for (n = height, p = src, q = d; n > 0; n--)
                 {
                     *q ^= *p;
                     p += src_width;
@@ -892,7 +894,7 @@ void direct_screen_blit(WORD count, WORD *str)
             case WM_ERASE:
                 if (forecol & 1)
                 {
-                    for (n = height, p = src, q = dst; n > 0; n--)
+                    for (n = height, p = src, q = d; n > 0; n--)
                     {
                         *q |= ~*p;
                         p += src_width;
@@ -901,7 +903,7 @@ void direct_screen_blit(WORD count, WORD *str)
                 }
                 else
                 {
-                    for (n = height, p = src, q = dst; n > 0; n--)
+                    for (n = height, p = src, q = d; n > 0; n--)
                     {
                         *q &= *p;
                         p += src_width;
@@ -1213,7 +1215,7 @@ void planar_text_blit(LOCALVARS *vars)
     vars->dform += (UWORD)(vars->DESTY+vars->DELY-1) * (ULONG)linea_vars.v_lin_wr;
     vars->d_next = -linea_vars.v_lin_wr;
 
-    normal_blit(vars+1, vars->sform, vars->dform);  /* call assembler helper function */
+    normal_blit_screen(vars+1, vars->sform, vars->dform);  /* call assembler helper function */
 }
 
 

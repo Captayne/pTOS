@@ -55,4 +55,17 @@
 # error unknown BYTE_ORDER
 #endif
 
+/*
+ * Planar screen memory holds native words with bit 15 as the leftmost
+ * pixel -- that is how the VDI fills, lines, raster copies and mouse
+ * cursor write it.  Code that writes it a byte (8 pixels) at a time must
+ * go through SCREEN_BYTE(), which on little-endian machines finds the
+ * byte holding those pixels within their word.
+ */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#   define SCREEN_BYTE(p) ((unsigned char *)((unsigned long)(p) ^ 1))
+#else
+#   define SCREEN_BYTE(p) ((unsigned char *)(p))
+#endif
+
 #endif // ENDIAN_H

@@ -13,9 +13,8 @@ CONF_WITH_IDE=n
 CONF_WITH_LINEA=n
 CONF_WITH_XHDI=n
 
-# Phase 1: command line only.  The AES/desktop needs a screen, which comes
-# with the video phase.
-CONF_WITH_AES=n
+# The AES and the desktop run on the 320x240 SPI display (see
+# CONF_WITH_RP2350_LCD).
 
 # Kernel debug output (kprintf, KINFO) is off, so that it does not mix
 # with the console.  For debugging, DEBUG_PRINT_RS232=y sends it to the

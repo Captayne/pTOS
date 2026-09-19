@@ -92,6 +92,14 @@ typedef struct {
  */
 void normal_blit(LOCALVARS *vars, UBYTE *src, UBYTE *dst);
 
+#if defined(__arm__) && !defined(__armbe__)
+/* same, but dst is planar screen memory, which holds native words (see
+ * SCREEN_BYTE() in endian.h) rather than the big-endian buffer words */
+void normal_blit_screen(LOCALVARS *vars, UBYTE *src, UBYTE *dst);
+#else
+#define normal_blit_screen normal_blit
+#endif
+
 /*
  * planar text blit: output the current glyph to a bitplane screen.
  * shared implementation, called directly when truecolor is off and via

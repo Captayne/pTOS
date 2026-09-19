@@ -145,3 +145,9 @@ ASM_FUNC(rp2350_nmi_entry):
         .balign 4
 C_SYM(start_in_hyp):
         .word   0
+
+// Base of the OS, as in the OS header of the other machines; the AES uses
+// it to tell whether someone has hooked trap #2 (aestrap_intercepted()).
+        .globl  C_SYM(os_beg)
+C_SYM(os_beg):
+        .word   rp2350_vectors

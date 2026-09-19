@@ -23,6 +23,7 @@
 #include "sound.h"              /* for bell() */
 #include "string.h"
 #include "conout.h"
+#include "endian.h"             /* for SCREEN_BYTE() */
 #include "raspi_screen.h"
 #include "../vdi/vdi_defs.h"    /* for phys_work stuff */
 #include "gsxdefs.h"
@@ -533,6 +534,7 @@ static void cell_xfer(UBYTE *src, UBYTE *dst)
         bg = linea_vars.v_col_bg;
     }
 
+    dst = SCREEN_BYTE(dst);             /* planar: see endian.h */
     src_sav = src;
     dst_sav = dst;
 
@@ -639,7 +641,7 @@ static void neg_cell(UBYTE *cell)
 #endif
     {
         for (plane = linea_vars.v_planes; plane--; ) {
-            UBYTE * addr = cell;        /* top of current dest plane */
+            UBYTE * addr = SCREEN_BYTE(cell); /* top of current dest plane */
 
             /* reset cell length counter */
             for (len = cell_len; len--; ) {

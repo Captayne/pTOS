@@ -22,6 +22,8 @@
 /*
  * source and destination buffers are sequences of (big endian) words,
  * with bit 15 the leftmost pixel; word number n covers pixel 16n..16n+15.
+ * The one exception is planar screen memory as the destination
+ * (normal_blit_screen()): it holds native words.
  */
 static UWORD get_src_word(const UBYTE *p)
 {
@@ -34,7 +36,30 @@ static void put_dst_word(UBYTE *p, UWORD w)
     p[1] = (UBYTE)(w & 0xff);
 }
 
+/* planar screen memory: native words */
+static UWORD get_scr_word(const UBYTE *p)
+{
+    return *(const UWORD *)p;
+}
+
+static void put_scr_word(UBYTE *p, UWORD w)
+{
+    *(UWORD *)p = w;
+}
+
+static void blit(LOCALVARS *vars, UBYTE *src, UBYTE *dst, BOOL screen);
+
 void normal_blit(LOCALVARS *vars, UBYTE *src, UBYTE *dst)
+{
+    blit(vars, src, dst, FALSE);
+}
+
+void normal_blit_screen(LOCALVARS *vars, UBYTE *src, UBYTE *dst)
+{
+    blit(vars, src, dst, TRUE);
+}
+
+static void blit(LOCALVARS *vars, UBYTE *src, UBYTE *dst, BOOL screen)
 {
     int x,y;
     // The caller passes a pointer to the end of the vars structure as that how
@@ -76,7 +101,8 @@ void normal_blit(LOCALVARS *vars, UBYTE *src, UBYTE *dst)
                 for (x = 0; x < vars->DELX; x++)
                 {
                     WORD dx = (WORD)(x + tddad);
-                    UWORD dw = get_src_word(drow + ((dx >> 4) << 1));
+                    UBYTE *dp = drow + ((dx >> 4) << 1);
+                    UWORD dw = screen ? get_scr_word(dp) : get_src_word(dp);
                     UWORD dmask = (UWORD)(0x8000 >> (dx & 15));
                     BOOL set = FALSE;
                     int k;
@@ -121,7 +147,10 @@ void normal_blit(LOCALVARS *vars, UBYTE *src, UBYTE *dst)
                         }
                         break;
                     }
-                    put_dst_word(drow + ((dx >> 4) << 1), dw);
+                    if (screen)
+                        put_scr_word(dp, dw);
+                    else
+                        put_dst_word(dp, dw);
                 }
             }
         }
