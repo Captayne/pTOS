@@ -26,6 +26,9 @@
 #include "rp2350_int.h"
 #include "rp2350_uart.h"
 #include "rp2350_usbcon.h"
+#if CONF_WITH_RP2350_LCD
+#include "rp2350_lcd.h"
+#endif
 #include "vectors.h"
 
 #define HZ          200     /* ticks per second, as the Atari timer C */
@@ -120,6 +123,9 @@ void rp2350_systick_handler(void)
 {
     rp2350_uart0_poll_rx();
     rp2350_usbcon_timer();
+#if CONF_WITH_RP2350_LCD
+    rp2350_lcd_tick();
+#endif
 
     if (vector_5ms)
         vector_5ms();

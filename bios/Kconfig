@@ -459,6 +459,16 @@ config CONF_WITH_RP2350_RTX
 	  given to core 1.  Without a runtime image in flash nothing
 	  happens, apart from the smaller memory.
 
+config CONF_WITH_RP2350_LCD
+	bool "RP2350: 2.8\" SPI display with touch (ILI9341, XPT2046)"
+	depends on MACHINE_RP2350
+	default y
+	help
+	  A 320x240 SPI display with resistive touch on the 40 pin header
+	  (wiring: docs/superpowers/plans/2026-09-18-rp2350-port.md).  The
+	  screen becomes a 320x240 monochrome one, streamed to the display
+	  by PIO1 and DMA; the touch panel drives the mouse.
+
 config CONF_WITH_RP2350_MONITOR
 	bool "RP2350 bring-up monitor (heartbeat NMI)"
 	depends on MACHINE_RP2350

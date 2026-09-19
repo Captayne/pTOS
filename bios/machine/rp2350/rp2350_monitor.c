@@ -16,12 +16,17 @@
  * than a second.  A healthy system never shows a line.  A break sent by
  * the terminal program asks for one report on the spot.  This is only
  * meant for bringing up the port (CONF_WITH_RP2350_MONITOR).
+ *
+ * With the SPI display, a break also dumps the 1 bpp framebuffer, one
+ * "[fb]" line of hex per scan line, for a host script (a screenshot
+ * without looking at the display).
  */
 
 #include "emutos.h"
 #include "rp2350.h"
 #include "rp2350_usbcon.h"
 #include "rp2350_monitor.h"
+#include "tosvars.h"
 
 #define TIMER0_TIMERAWL     RP2350_REG(RP2350_TIMER0_BASE + 0x28)
 #define TIMER0_ALARM0       RP2350_REG(RP2350_TIMER0_BASE + 0x10)
@@ -47,6 +52,25 @@ static void mon_puthex(ULONG v)
     for (i = 28; i >= 0; i -= 4)
         rp2350_usbcon_putc((UBYTE)"0123456789abcdef"[(v >> i) & 0xf]);
 }
+
+#if CONF_WITH_RP2350_LCD
+static void mon_dump_fb(void)
+{
+    const UBYTE *p = v_bas_ad;
+    int x, y;
+
+    for (y = 0; y < 240; y++)
+    {
+        mon_puts("[fb]");
+        for (x = 0; x < 320 / 8; x++, p++)
+        {
+            rp2350_usbcon_putc((UBYTE)"0123456789abcdef"[*p >> 4]);
+            rp2350_usbcon_putc((UBYTE)"0123456789abcdef"[*p & 0xf]);
+        }
+        mon_puts("\r\n");
+    }
+}
+#endif
 
 /* called from rp2350_nmi_entry (startup.S) with the interrupted frame */
 void rp2350_monitor_nmi(ULONG *frame)
@@ -74,6 +98,10 @@ void rp2350_monitor_nmi(ULONG *frame)
         mon_puts(" xpsr=");
         mon_puthex(frame[7]);
         mon_puts("\r\n");
+#if CONF_WITH_RP2350_LCD
+        if (!stuck_ticks)
+            mon_dump_fb();
+#endif
     }
 
     rp2350_usbcon_poll();

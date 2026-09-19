@@ -40,6 +40,9 @@
 #ifdef MACHINE_RPI
 #include "raspi_screen.h"
 #endif
+#if CONF_WITH_RP2350_LCD
+#include "rp2350_lcd.h"
+#endif
 #include "lisa.h"
 #include "nova.h"
 
@@ -644,8 +647,13 @@ void screen_init_mode(void)
     initialise_palette_registers(0,0);
 #elif defined(MACHINE_RP2350)
     /* ST high (640x400 monochrome): 80 columns for the serial console,
-     * and the mode the RP2350 video output is going to show */
+     * and the mode the RP2350 video output is going to show.  With the
+     * SPI display, the monochrome screen is the display's 320x240
+     * instead (screen_get_current_mode_info()). */
     sshiftmod = ST_HIGH;
+#if CONF_WITH_RP2350_LCD
+    rp2350_lcd_init();
+#endif
 #endif /* CONF_WITH_ATARI_VIDEO */
 #if CONF_WITH_VIRTIO_GPU
     virtio_gpu_init();
@@ -798,6 +806,8 @@ static ULONG initial_vram_size(void)
     return amiga_initial_vram_size();
 #elif defined(MACHINE_LISA)
     return 32*1024UL;
+#elif CONF_WITH_RP2350_LCD
+    return 16*1024UL;       /* 320x240 monochrome needs 9600 bytes */
 #else
     ULONG vram_size;
 
@@ -871,6 +881,8 @@ void screen_get_current_mode_info(UWORD *planes, UWORD *hz_rez, UWORD *vt_rez)
     *planes = 1;
     *hz_rez = 720;
     *vt_rez = 364;
+#elif CONF_WITH_RP2350_LCD
+    rp2350_lcd_get_mode(planes, hz_rez, vt_rez);
 #else
     atari_get_current_mode_info(planes, hz_rez, vt_rez);
 #endif
@@ -936,6 +948,9 @@ void screen_get_current_mode_desc(SCREEN_MODE_DESC *desc)
     raspi_get_current_mode_desc(desc);
 #elif defined(MACHINE_AMIGA)
     amiga_get_current_mode_info(&planes, &hz_rez, &vt_rez);
+    planar_mode_desc(desc, planes, hz_rez, vt_rez);
+#elif CONF_WITH_RP2350_LCD
+    rp2350_lcd_get_mode(&planes, &hz_rez, &vt_rez);
     planar_mode_desc(desc, planes, hz_rez, vt_rez);
 #else
     atari_get_current_mode_info(&planes, &hz_rez, &vt_rez);
