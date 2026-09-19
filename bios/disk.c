@@ -26,6 +26,9 @@
 #include "acsi.h"
 #include "scsi.h"
 #include "sd.h"
+#if CONF_WITH_RP2350_FLASHDISK
+#include "rp2350_flashdisk.h"
+#endif
 #include "raspi_emmc.h"
 #include "virtio_blk.h"
 #include "string.h"
@@ -365,6 +368,22 @@ void disk_init_all(void)
         }
     }
 
+#if CONF_WITH_RP2350_FLASHDISK
+    /*
+     * The flash disk is not on a bus that is scanned above: it is always
+     * there, and always one drive.  F: if that is free (C: and D: are
+     * usually the SD card), else the next free letter.
+     */
+    {
+        LONG preferred = devices_available & (1L << ('F'-'A'));
+
+        if (preferred)
+            devices_available = preferred;
+        if (devices_available)
+            disk_init_one(GET_UNITNUM(FLASHDISK_BUS,0),&devices_available);
+    }
+#endif
+
     /* save bitmaps of drives associated with each physical unit.
      * these maps are not changed after booting.
      *
@@ -461,6 +480,11 @@ LONG disk_mediach(UWORD unit)
         ret = virtio_blk_ioctl(reldev,GET_MEDIACHANGE,NULL);
         break;
 #endif /* CONF_WITH_VIRTIO_BLK */
+#if CONF_WITH_RP2350_FLASHDISK
+    case FLASHDISK_BUS:
+        ret = rp2350_flashdisk_ioctl(reldev,GET_MEDIACHANGE,NULL);
+        break;
+#endif /* CONF_WITH_RP2350_FLASHDISK */
     default:
         ret = EUNDEV;
     }
@@ -1119,6 +1143,11 @@ static LONG internal_inquire(UWORD unit, ULONG *blocksize, ULONG *deviceflags, c
         ret = virtio_blk_ioctl(reldev,GET_DISKNAME,name);
         break;
 #endif /* CONF_WITH_VIRTIO_BLK */
+#if CONF_WITH_RP2350_FLASHDISK
+    case FLASHDISK_BUS:
+        ret = rp2350_flashdisk_ioctl(reldev,GET_DISKNAME,name);
+        break;
+#endif /* CONF_WITH_RP2350_FLASHDISK */
     default:
         ret = EUNDEV;
     }
@@ -1227,6 +1256,13 @@ LONG disk_get_capacity(UWORD unit, ULONG *blocks, ULONG *blocksize)
             return ret;
         break;
 #endif /* CONF_WITH_RASPI_EMMC */
+#if CONF_WITH_RP2350_FLASHDISK
+    case FLASHDISK_BUS:
+        ret = rp2350_flashdisk_ioctl(reldev,GET_DISKINFO,info);
+        if (ret < 0)
+            return ret;
+        break;
+#endif /* CONF_WITH_RP2350_FLASHDISK */
 #if CONF_WITH_VIRTIO_BLK
     case VIRTIO_BUS:
         ret = virtio_blk_ioctl(reldev,GET_DISKINFO,info);
@@ -1309,6 +1345,11 @@ LONG disk_rw(UWORD unit, UWORD rw, ULONG sector, UWORD count, UBYTE *buf)
         KDEBUG(("sd_rw() returned %ld\n", ret));
         break;
 #endif /* CONF_WITH_SDMMC */
+#if CONF_WITH_RP2350_FLASHDISK
+    case FLASHDISK_BUS:
+        ret = rp2350_flashdisk_rw(rw, sector, count, buf, reldev);
+        break;
+#endif /* CONF_WITH_RP2350_FLASHDISK */
 #if CONF_WITH_VIRTIO_BLK
     case VIRTIO_BUS:
         ret = virtio_blk_rw(rw, sector, count, buf, reldev);

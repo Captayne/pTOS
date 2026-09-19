@@ -30,6 +30,9 @@
 #include "scsi.h"
 #include "ide.h"
 #include "sd.h"
+#if CONF_WITH_RP2350_FLASHDISK
+#include "rp2350_flashdisk.h"
+#endif
 #include "raspi_emmc.h"
 #include "virtio_blk.h"
 #include "scsidriv.h"
@@ -243,6 +246,10 @@ static void bus_init(void)
 
 #if CONF_WITH_VIRTIO_BLK
     virtio_blk_init();
+#endif
+
+#if CONF_WITH_RP2350_FLASHDISK
+    rp2350_flashdisk_init();
 #endif
 }
 

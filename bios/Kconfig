@@ -469,6 +469,17 @@ config CONF_WITH_RP2350_LCD
 	  screen becomes a 320x240 monochrome one, streamed to the display
 	  by PIO1 and DMA; the touch panel drives the mouse.
 
+config CONF_WITH_RP2350_FLASHDISK
+	bool "RP2350: a drive in the QSPI flash"
+	depends on MACHINE_RP2350
+	default y
+	help
+	  4 MB of the 16 MB flash become a drive (F:), for programs and data
+	  that stay on the machine without an SD card.  A translation layer
+	  with wear levelling sits underneath, so that rewriting the same
+	  file system sectors does not wear out single flash blocks; 7 MB of
+	  flash are used for the 4 MB drive, the rest being spare capacity.
+
 config CONF_WITH_RP2350_MONITOR
 	bool "RP2350 bring-up monitor (heartbeat NMI)"
 	depends on MACHINE_RP2350

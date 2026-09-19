@@ -102,6 +102,18 @@ ASM_FUNC(main):
         str     r2, [r0], #4
         b       1b
 2:
+        // .ramtext (the flash driver) from flash into SRAM: it cannot run
+        // from the flash it is about to erase.  After the clearing above,
+        // which covers its range.
+        ldr     r0, =__ramtext
+        ldr     r1, =__eramtext
+        ldr     r2, =__ramtext_load
+1:      cmp     r0, r1
+        bhs     2f
+        ldr     r3, [r2], #4
+        str     r3, [r0], #4
+        b       1b
+2:
         // Report fault causes separately instead of escalating everything
         // to HardFault: enable MemManage, BusFault, UsageFault, SecureFault.
         ldr     r0, =ARMV8M_SCB_SHCSR
