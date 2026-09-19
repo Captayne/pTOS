@@ -76,6 +76,9 @@ char *exclude_items[] =
     "STRDINF",
     "STINVINF",
 #endif
+#if !CONF_WITH_TOUCH_CALIBRATION
+    "TOUCITEM",
+#endif
 #if !CONF_WITH_BLITTER
     "BLITITEM",
     "SEP_OP1",

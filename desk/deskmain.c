@@ -65,6 +65,7 @@ extern const LONG cicontest_rsc_size;
 #include "deskobj.h"
 #include "deskrez.h"
 #include "deskmain.h"
+#include "desktouch.h"
 #include "scancode.h"
 
 /* structure pointed to by return value from Keytbl() */
@@ -908,6 +909,11 @@ static WORD do_optnmenu(WORD item)
 #if CONF_WITH_DESKTOP_CONFIG
     case CONFITEM:
         inf_conf();
+        break;
+#endif
+#if CONF_WITH_TOUCH_CALIBRATION
+    case TOUCITEM:
+        touch_calibration();
         break;
 #endif
     case RESITEM:
@@ -2094,6 +2100,11 @@ BOOL deskmain(void)
     wind_update(BEG_UPDATE);
     cnx_get();
     wind_update(END_UPDATE);
+
+#if CONF_WITH_TOUCH_CALIBRATION
+    /* the touch calibration saved by "Touch calibration..." */
+    touch_load_calibration();
+#endif
 
 #if CONF_WITH_BLITTER
     /*

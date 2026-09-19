@@ -150,20 +150,36 @@ static UBYTE mouse_buttons;
 /*
  * Touch as a mouse (polled every 10 ms, see touch_poll()):
  *  - touch and lift without moving: a click; two quick taps: a double click
- *  - touch and move: the pointer follows, no button (menus drop by hover)
+ *  - touch and move: the pointer follows, no button (menus drop by hover);
+ *    it jumps to where the finger lands, but then only follows once the
+ *    finger has moved more than TOUCH_STILL -- the AES cancels its wait
+ *    for a second click as soon as the mouse moves
  *  - touch and keep still for TOUCH_HOLD: the button goes down; moving then
  *    drags, lifting releases it
+ *  - a tap soon after a tap, near it: the button goes down at once, where
+ *    the first tap was -- with a tap clicking only when lifted, the second
+ *    click of a double click would otherwise come too late for the AES
  */
 #define TOUCH_SETTLE    2       /* polls a touch must last to count */
 #define TOUCH_LIFT      3       /* polls without touch that mean "lifted" */
 #define TOUCH_HOLD      40      /* polls (400 ms) still for "button down" */
-#define TOUCH_STILL     6       /* pixels the finger may wobble when still */
+#define TOUCH_STILL     10      /* pixels the finger may wobble when still */
+#define TOUCH_DCLICK    40      /* polls (400 ms) from a tap to a second one */
+#define TOUCH_DNEAR     24      /* pixels between them */
 
 enum { T_IDLE, T_TAP, T_MOVE, T_DRAG };
 static UBYTE touch_state;
 static UBYTE touch_count;       /* polls touched (settling) or not (lifting) */
 static UBYTE still_polls;       /* polls since the finger last moved */
 static WORD anchor_x, anchor_y; /* where it was then */
+static ULONG polls;             /* touch_poll() calls */
+static ULONG tap_polls;         /* when the last tap ended */
+static WORD tap_x, tap_y;       /* and where */
+static BOOL tap_valid;
+static BOOL follow;             /* the pointer follows the finger */
+
+/* bring-up statistics, reported by rp2350_monitor.c */
+UWORD rp2350_touch_stat[5];     /* taps, double taps, moves, holds, gap */
 
 /* ==== display commands, bit-banged while the PIO is not using the pins ==== */
 
@@ -298,12 +314,8 @@ static UWORD touch_read(UBYTE cmd)
     return v >> 3;
 }
 
-static WORD map(const struct tch_cal *c, BOOL y, UWORD rx, UWORD ry, WORD max)
+static WORD clip(LONG v, WORD max)
 {
-    long long a = y ? c->ya : c->xa;
-    long long b = y ? c->yb : c->xb;
-    LONG v = (LONG)((a * rx + b * ry) / c->div) + (y ? c->yoff : c->xoff);
-
     return (WORD)(v < 0 ? 0 : v > max ? max : v);
 }
 
@@ -339,10 +351,34 @@ static void touch_lifted(void)
     {
         set_button(0x02);               /* a tap: press and release */
         set_button(0);
+        rp2350_touch_stat[0]++;
+        tap_valid = TRUE;
+        tap_polls = polls;
+        tap_x = anchor_x;
+        tap_y = anchor_y;
     }
     else if (touch_state == T_DRAG)
         set_button(0);
     touch_state = T_IDLE;
+}
+
+/* noise: running mean of the jump between successive raw readings while
+ * touched, times 16 (bring-up aid, see rp2350_monitor.c) */
+UWORD rp2350_lcd_touch_noise_x, rp2350_lcd_touch_noise_y;
+static UWORD prev_rx, prev_ry;
+
+static void track_noise(UWORD rx, UWORD ry)
+{
+    UWORD dx = rx > prev_rx ? rx - prev_rx : prev_rx - rx;
+    UWORD dy = ry > prev_ry ? ry - prev_ry : prev_ry - ry;
+
+    if (touch_state == T_TAP || touch_state == T_DRAG)     /* finger still */
+    {
+        rp2350_lcd_touch_noise_x += dx - (rp2350_lcd_touch_noise_x >> 4);
+        rp2350_lcd_touch_noise_y += dy - (rp2350_lcd_touch_noise_y >> 4);
+    }
+    prev_rx = rx;
+    prev_ry = ry;
 }
 
 static void touch_poll(void)
@@ -350,6 +386,8 @@ static void touch_poll(void)
     UWORD rx, ry, a, b;
     WORD x, y;
     int i;
+
+    polls++;
 
     /* mouse switched off by a program in the middle of a drag: the
      * button must not stay down */
@@ -386,38 +424,89 @@ static void touch_poll(void)
     if ((SIO_IN & BIT(T_IRQ)) || rx < 50 || rx > 4045 || ry < 50 || ry > 4045)
         return;
 
-    x = map(&cal[cal_idx], FALSE, rx, ry, WIDTH - 1);
-    y = map(&cal[cal_idx], TRUE, rx, ry, HEIGHT - 1);
+    {
+        LONG sx, sy;
+
+        tch_map(&cal[cal_idx], rx, ry, &sx, &sy);
+        x = clip(sx, WIDTH - 1);
+        y = clip(sy, HEIGHT - 1);
+    }
     rp2350_lcd_touch_raw_x = rx;
     rp2350_lcd_touch_raw_y = ry;
+    track_noise(rx, ry);
 
     if (touch_state == T_IDLE)
     {
         /* let the contact settle before believing its position */
         if (++touch_count < TOUCH_SETTLE)
             return;
+        touch_count = 0;
         touch_state = T_TAP;
+        still_polls = 0;
+        follow = FALSE;
+
+        if (tap_valid && polls - tap_polls <= TOUCH_DCLICK
+            && x - tap_x <= TOUCH_DNEAR && tap_x - x <= TOUCH_DNEAR
+            && y - tap_y <= TOUCH_DNEAR && tap_y - y <= TOUCH_DNEAR)
+        {
+            /* second tap of a double click: press at once, and without
+             * moving the pointer -- the AES ends its wait for a second
+             * click as soon as the mouse moves (mchange()) */
+            rp2350_touch_stat[1]++;
+            rp2350_touch_stat[4] = (UWORD)(polls - tap_polls);
+            tap_valid = FALSE;
+            anchor_x = x;
+            anchor_y = y;
+            touch_state = T_DRAG;
+            set_button(0x02);
+            return;
+        }
+
+        /* a new touch: the pointer jumps there, then stays put until the
+         * finger really moves (see above) */
         anchor_x = x;
         anchor_y = y;
-        still_polls = 0;
+        send_mouse(x - linea_vars.GCURX, y - linea_vars.GCURY);
+        return;
     }
     touch_count = 0;
 
-    /* the pointer follows the finger, without a button until held still */
-    send_mouse(x - linea_vars.GCURX, y - linea_vars.GCURY);
-
-    if (x - anchor_x > TOUCH_STILL || anchor_x - x > TOUCH_STILL
-        || y - anchor_y > TOUCH_STILL || anchor_y - y > TOUCH_STILL)
+    if (!follow && (x - anchor_x > TOUCH_STILL || anchor_x - x > TOUCH_STILL
+                    || y - anchor_y > TOUCH_STILL || anchor_y - y > TOUCH_STILL))
     {
+        follow = TRUE;                  /* the finger moves: follow it */
         if (touch_state == T_TAP)
+        {
             touch_state = T_MOVE;       /* no longer a tap */
-        anchor_x = x;
-        anchor_y = y;
-        still_polls = 0;
+            rp2350_touch_stat[2]++;
+        }
     }
-    else if (touch_state != T_DRAG && ++still_polls >= TOUCH_HOLD)
+
+    if (follow)
+    {
+        send_mouse(x - linea_vars.GCURX, y - linea_vars.GCURY);
+        if (touch_state == T_MOVE)
+        {
+            /* holding still after moving presses the button as well */
+            if (x - anchor_x > TOUCH_STILL || anchor_x - x > TOUCH_STILL
+                || y - anchor_y > TOUCH_STILL || anchor_y - y > TOUCH_STILL)
+            {
+                anchor_x = x;
+                anchor_y = y;
+                still_polls = 0;
+            }
+            else if (++still_polls >= TOUCH_HOLD)
+            {
+                touch_state = T_DRAG;
+                rp2350_touch_stat[3]++;
+                set_button(0x02);
+            }
+        }
+    }
+    else if (touch_state == T_TAP && ++still_polls >= TOUCH_HOLD)
     {
         touch_state = T_DRAG;           /* held still: button down */
+        rp2350_touch_stat[3]++;
         set_button(0x02);
     }
 }
@@ -465,15 +554,24 @@ static const struct tch_api tch_api = {
 /*
  * The way out when the calibration is so far off that the calibration
  * program cannot be reached with the pointer: keep a finger on the screen
- * while the machine starts, and it asks for three crosses to be touched,
+ * while the machine starts, and it asks for nine crosses to be touched,
  * before the desktop comes up.  Runs with interrupts enabled: the timer
  * keeps the display refreshed and the touch polled (with the mouse off).
  */
 
-static const short cal_points[3][2] = {
+/* a 3 x 3 grid at 10 %, 50 % and 90 % of the screen, fitted by least
+ * squares (tch_fit()) */
+#define CAL_POINTS      9
+static const short cal_points[CAL_POINTS][2] = {
     { WIDTH / 10, HEIGHT / 10 },
+    { WIDTH / 2, HEIGHT / 10 },
+    { WIDTH - WIDTH / 10, HEIGHT / 10 },
+    { WIDTH / 10, HEIGHT / 2 },
+    { WIDTH / 2, HEIGHT / 2 },
     { WIDTH - WIDTH / 10, HEIGHT / 2 },
-    { WIDTH / 2, HEIGHT - HEIGHT / 10 }
+    { WIDTH / 10, HEIGHT - HEIGHT / 10 },
+    { WIDTH / 2, HEIGHT - HEIGHT / 10 },
+    { WIDTH - WIDTH / 10, HEIGHT - HEIGHT / 10 }
 };
 
 static void put_pixel(WORD x, WORD y, BOOL on)
@@ -549,7 +647,7 @@ static void read_touch(short *raw)
 void rp2350_lcd_boot_calibration(void)
 {
     struct tch_cal c;
-    short raw[3][2];
+    short raw[CAL_POINTS][2];
     int i;
 
     if (SIO_IN & BIT(T_IRQ))            /* not touched: nothing to do */
@@ -562,7 +660,7 @@ void rp2350_lcd_boot_calibration(void)
     wait_ms(30);                        /* the poll sees the finger */
     wait_lifted();
 
-    for (i = 0; i < 3; i++)
+    for (i = 0; i < CAL_POINTS; i++)
     {
         draw_cross(cal_points[i], TRUE);
         read_touch(raw[i]);
@@ -570,14 +668,17 @@ void rp2350_lcd_boot_calibration(void)
         wait_lifted();
     }
 
-    if (tch_compute(&c, cal_points, raw) == 0 && tch_set_cal(&c) == 0)
+    if (tch_fit(&c, cal_points, (const short (*)[2])raw, CAL_POINTS) == 0
+        && tch_set_cal(&c) == 0)
     {
+        LONG err = tch_error(&c, cal_points, (const short (*)[2])raw, CAL_POINTS);
+
         cal_flags |= TCH_BOOTCAL;
-        cprintf("\r\n Done.\r\n");
+        cprintf("\r\n Done, mean error %ld.%ld pixels.\r\n", err / 10, err % 10);
     }
     else
         cprintf("\r\n Failed, keeping the old calibration.\r\n");
-    wait_ms(1000);
+    wait_ms(2000);
     cprintf("\033E");
     mouse_off = FALSE;
 }

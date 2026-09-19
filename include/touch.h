@@ -29,8 +29,9 @@
  *      x = xoff + (xa * rx + xb * ry) / div
  *      y = yoff + (ya * rx + yb * ry) / div
  *
- * (products and sums computed in 64 bits).  tch_compute() below derives
- * it from three touched points.
+ * (products and sums computed in 64 bits, the division truncating;
+ * tch_map() below).  tch_fit() derives it from touched points by a
+ * least-squares fit, tch_error() tells how well it matches them.
  *
  * All functions only exchange data with the driver; they can be called
  * from user mode, and from an accessory.
@@ -74,48 +75,149 @@ struct tch_api
     void (*set_mouse)(long on);
 };
 
-/*
- * Compute the calibration mapping the raw readings raw[i] to the screen
- * points scr[i] (i = 0..2; x at [0], y at [1]).  The three points must
- * not lie on a line.  Returns 0, or -1 when they do.
- */
-static inline long tch_compute(struct tch_cal *cal,
-                               const short scr[3][2], const short raw[3][2])
+/* screen position for a raw reading (not clipped to the screen) */
+static inline void tch_map(const struct tch_cal *cal, long rx, long ry,
+                           long *x, long *y)
 {
-    long long rx0 = raw[0][0], ry0 = raw[0][1];
-    long long rx1 = raw[1][0], ry1 = raw[1][1];
-    long long rx2 = raw[2][0], ry2 = raw[2][1];
-    long long d = (rx0 - rx2) * (ry1 - ry2) - (rx1 - rx2) * (ry0 - ry2);
-    int axis;
+    *x = cal->xoff + (long)(((long long)cal->xa * rx
+                             + (long long)cal->xb * ry) / cal->div);
+    *y = cal->yoff + (long)(((long long)cal->ya * rx
+                             + (long long)cal->yb * ry) / cal->div);
+}
 
-    if (d == 0)
+#define TCH_FIT_MAX     12      /* points tch_fit() takes at most */
+
+/* a / b rounded to the nearest integer, b > 0 */
+static inline long long tch_rdiv(long long a, long long b)
+{
+    return a >= 0 ? (a + b / 2) / b : -((-a + b / 2) / b);
+}
+
+/*
+ * Fit the calibration to n touched points (3 <= n <= TCH_FIT_MAX): the
+ * affine map that takes the raw readings raw[i] closest to the screen
+ * points scr[i] in the least-squares sense (x at [0], y at [1]).  More
+ * points than the three an affine map needs average out the noise of a
+ * resistive panel.  Returns 0, or -1 when the points do not span the
+ * screen (all on a line).
+ *
+ * Integer arithmetic only: every sum is taken n times (n * sum(rx * rx) -
+ * sum(rx) * sum(rx), ...), which keeps it exact and, for 12-bit readings
+ * and at most 12 points, within 64 bits.
+ */
+static inline long tch_fit(struct tch_cal *cal, const short scr[][2],
+                           const short raw[][2], int n)
+{
+    long long sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+    long long kxx, kyy, kxy, d, m;
+    long long a[2], b[2], ss[2];
+    int i, axis, shift;
+
+    if (n < 3 || n > TCH_FIT_MAX)
+        return -1;
+
+    for (i = 0; i < n; i++)
+    {
+        long long rx = raw[i][0], ry = raw[i][1];
+
+        sx += rx;
+        sy += ry;
+        sxx += rx * rx;
+        syy += ry * ry;
+        sxy += rx * ry;
+    }
+    kxx = n * sxx - sx * sx;
+    kyy = n * syy - sy * sy;
+    kxy = n * sxy - sx * sy;
+    d = kxx * kyy - kxy * kxy;
+    if (d <= 0)
         return -1;
 
     for (axis = 0; axis < 2; axis++)
     {
-        long long s0 = scr[0][axis], s1 = scr[1][axis], s2 = scr[2][axis];
-        long long a = (s0 - s2) * (ry1 - ry2) - (s1 - s2) * (ry0 - ry2);
-        long long b = (rx0 - rx2) * (s1 - s2) - (s0 - s2) * (rx1 - rx2);
-        long long c = ry0 * (rx2 * s1 - rx1 * s2) + ry1 * (rx0 * s2 - rx2 * s0)
-                    + ry2 * (rx1 * s0 - rx0 * s1);
-        long off = (long)(c / d);
+        long long s = 0, sxs = 0, sys = 0, kxs, kys;
 
-        if (axis == 0)
+        for (i = 0; i < n; i++)
         {
-            cal->xa = (long)a;
-            cal->xb = (long)b;
-            cal->xoff = off;
+            s += scr[i][axis];
+            sxs += (long long)raw[i][0] * scr[i][axis];
+            sys += (long long)raw[i][1] * scr[i][axis];
         }
-        else
-        {
-            cal->ya = (long)a;
-            cal->yb = (long)b;
-            cal->yoff = off;
-        }
+        kxs = n * sxs - sx * s;
+        kys = n * sys - sy * s;
+        a[axis] = kxs * kyy - kys * kxy;    /* slope along rx, times d */
+        b[axis] = kys * kxx - kxs * kxy;    /* slope along ry, times d */
+        ss[axis] = s;
     }
-    cal->div = (long)d;
+
+    /* scale the slopes and their divisor down together to 31 bits */
+    m = d;
+    for (axis = 0; axis < 2; axis++)
+    {
+        if ((a[axis] < 0 ? -a[axis] : a[axis]) > m)
+            m = a[axis] < 0 ? -a[axis] : a[axis];
+        if ((b[axis] < 0 ? -b[axis] : b[axis]) > m)
+            m = b[axis] < 0 ? -b[axis] : b[axis];
+    }
+    for (shift = 0; (m >> shift) >= 0x40000000LL; shift++)
+        ;
+    cal->div = (long)(d >> shift);
+    cal->xa = (long)(a[0] >> shift);
+    cal->xb = (long)(b[0] >> shift);
+    cal->ya = (long)(a[1] >> shift);
+    cal->yb = (long)(b[1] >> shift);
+    if (cal->div == 0)
+        return -1;
+
+    /* the fitted plane passes through the centroid of the points */
+    cal->xoff = (long)tch_rdiv(ss[0] * cal->div - (long long)cal->xa * sx
+                               - (long long)cal->xb * sy,
+                               (long long)n * cal->div);
+    cal->yoff = (long)tch_rdiv(ss[1] * cal->div - (long long)cal->ya * sx
+                               - (long long)cal->yb * sy,
+                               (long long)n * cal->div);
 
     return 0;
+}
+
+/*
+ * How well the calibration matches the points: the root mean square
+ * distance between where it puts each raw reading and where the point
+ * really is, in tenths of a pixel.
+ */
+static inline long tch_error(const struct tch_cal *cal, const short scr[][2],
+                             const short raw[][2], int n)
+{
+    unsigned long sum = 0, r, bit;
+    long x, y;
+    int i;
+
+    if (n <= 0)
+        return 0;
+    for (i = 0; i < n; i++)
+    {
+        tch_map(cal, raw[i][0], raw[i][1], &x, &y);
+        x = (x - scr[i][0]) * 10;
+        y = (y - scr[i][1]) * 10;
+        sum += (unsigned long)(x * x + y * y);
+    }
+    sum /= n;
+
+    /* integer square root */
+    r = 0;
+    for (bit = 1UL << 30; bit > sum; bit >>= 2)
+        ;
+    for ( ; bit; bit >>= 2)
+    {
+        if (sum >= r + bit)
+        {
+            sum -= r + bit;
+            r = (r >> 1) + bit;
+        }
+        else
+            r >>= 1;
+    }
+    return (long)r;
 }
 
 #endif /* TOUCH_H */

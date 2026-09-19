@@ -143,6 +143,20 @@ void rp2350_monitor_nmi(ULONG *frame)
         mon_puthex((UWORD)linea_vars.GCURX);
         mon_puts(" y=");
         mon_puthex((UWORD)linea_vars.GCURY);
+        mon_puts(" noise x16 x=");
+        mon_puthex(rp2350_lcd_touch_noise_x);
+        mon_puts(" y=");
+        mon_puthex(rp2350_lcd_touch_noise_y);
+        mon_puts("\r\n[touch] taps=");
+        mon_puthex(rp2350_touch_stat[0]);
+        mon_puts(" dtaps=");
+        mon_puthex(rp2350_touch_stat[1]);
+        mon_puts(" moves=");
+        mon_puthex(rp2350_touch_stat[2]);
+        mon_puts(" holds=");
+        mon_puthex(rp2350_touch_stat[3]);
+        mon_puts(" gap=");
+        mon_puthex(rp2350_touch_stat[4]);
         mon_puts("\r\n");
         if (!stuck_ticks)
             mon_dump_fb();
