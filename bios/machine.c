@@ -44,6 +44,7 @@
 #include "biosext.h"
 #if CONF_WITH_RP2350_RTX
 #include "rp2350_rtx.h"
+#include "rp2350_usbcon.h"
 #endif
 #ifdef MACHINE_AMIGA
 #include "amiga.h"
@@ -807,6 +808,11 @@ void fill_cookie_jar(void)
 #if CONF_WITH_RP2350_RTX
     /* starts core 1 and adds the _RTX cookie */
     rp2350_rtx_init();
+#endif
+
+#ifdef MACHINE_RP2350
+    /* the USB console, for programs that need it raw (_UCN) */
+    rp2350_usbcon_add_cookie();
 #endif
 }
 
