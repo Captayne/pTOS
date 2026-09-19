@@ -41,6 +41,8 @@
 #include "iorec.h"
 #include "asm.h"
 #include "string.h"
+#include "cookie.h"
+#include "usbcon.h"
 
 /* Controller registers */
 #define USB_REGS            0x50110000UL
@@ -171,8 +173,9 @@ static const char *const strings[] = {
 static UBYTE tx_ring[TX_RING_SIZE];
 static volatile UWORD tx_head, tx_tail;
 
-/* Input ring, only used when the console input is not fed to the IKBD */
-#define RX_RING_SIZE 256
+/* Input ring: used when the console input is not fed to the IKBD, and in
+ * raw mode (see include/usbcon.h), where a program takes the port over */
+#define RX_RING_SIZE 1024
 static UBYTE rx_ring[RX_RING_SIZE];
 static volatile UWORD rx_head, rx_tail;
 
@@ -186,6 +189,7 @@ static volatile BOOL dtr;           /* a terminal has the port open */
 static volatile BOOL tx_busy;
 volatile BOOL rp2350_usbcon_break;  /* the host sent a break (monitor) */
 static BOOL in_poll;
+static volatile BOOL raw_mode;      /* a program reads the port itself */
 
 static UBYTE pending_addr;
 static BOOL set_addr_pending;
@@ -467,6 +471,9 @@ static BOOL rx_waiting;
 static BOOL rx_room(void)
 {
 #if CONF_SERIAL_CONSOLE
+    if (raw_mode)
+        return (rx_head + 1) % RX_RING_SIZE != rx_tail;
+
     /* one more 4-byte record must fit into the keyboard IOREC */
     WORD tail = ikbdiorec.tail + 4;
 
@@ -486,8 +493,13 @@ static void rx_drain(void)
     {
         UBYTE c = buf[rx_pos++];
 #if CONF_SERIAL_CONSOLE
-        push_ascii_ikbdiorec(c);
-#else
+        if (!raw_mode)
+        {
+            push_ascii_ikbdiorec(c);
+            continue;
+        }
+#endif
+#if 1
         rx_ring[rx_head] = c;
         rx_head = (rx_head + 1) % RX_RING_SIZE;
 #endif
@@ -643,6 +655,61 @@ void rp2350_usbcon_putc(UBYTE c)
         tx_kick();
         __asm__ volatile ("msr primask, %0" : : "r"(primask) : "memory");
     }
+}
+
+/* ==== _UCN cookie: the port for programs (include/usbcon.h) ============= */
+
+static long ucn_set_raw(long on)
+{
+    BOOL was = raw_mode;
+
+    raw_mode = on ? TRUE : FALSE;
+    if (!raw_mode)
+        rx_tail = rx_head;          /* drop what nobody asked for */
+    rp2350_usbcon_timer();          /* the host may continue */
+    return was;
+}
+
+static long ucn_status(void)
+{
+    WORD n = rx_head - rx_tail;
+
+    return n < 0 ? n + RX_RING_SIZE : n;
+}
+
+static long ucn_read(void *buf, long len)
+{
+    UBYTE *p = buf;
+    long n = 0;
+
+    while (n < len && rx_head != rx_tail)
+    {
+        p[n++] = rx_ring[rx_tail];
+        rx_tail = (rx_tail + 1) % RX_RING_SIZE;
+    }
+    if (n)
+        rp2350_usbcon_timer();      /* there is room again */
+    return n;
+}
+
+static long ucn_write(const void *buf, long len)
+{
+    const UBYTE *p = buf;
+    long n;
+
+    for (n = 0; n < len; n++)
+        rp2350_usbcon_putc(p[n]);
+    return n;
+}
+
+static const struct ucn_api ucn_api = {
+    UCN_VERSION, sizeof(struct ucn_api),
+    ucn_set_raw, ucn_status, ucn_read, ucn_write
+};
+
+void rp2350_usbcon_add_cookie(void)
+{
+    cookie_add(UCN_COOKIE, (ULONG)&ucn_api);
 }
 
 BOOL rp2350_usbcon_can_read(void)
