@@ -51,9 +51,9 @@ rp2350_vectors:
         .word   C_SYM(armv8m_fault_handler)     // DebugMonitor
         .word   0                               // reserved
         .word   C_SYM(armv8m_fault_handler)     // PendSV (unused)
-        .word   C_SYM(rp2350_systick_handler)   // SysTick
+        .word   systick_entry                   // SysTick
         .rept   RP2350_NUM_IRQS
-        .word   C_SYM(rp2350_irq_handler)       // external interrupts
+        .word   irq_entry                       // external interrupts
         .endr
 
 // ==== IMAGE_DEF block ======================================================
@@ -151,3 +151,37 @@ C_SYM(start_in_hyp):
         .globl  C_SYM(os_beg)
 C_SYM(os_beg):
         .word   rp2350_vectors
+
+// ==== Interrupt entry ======================================================
+// Handler mode always runs on the main stack, which in Thread mode is also
+// the stack of whatever runs there -- for the AES, the small private stack
+// of the current process.  The system timer and interrupt handlers do a
+// lot (mouse, VDI, AES timer), so they switch to a stack of their own.
+// All of them share one priority and never preempt each other, so one
+// stack is enough; only the hardware frame stays on the interrupted stack.
+
+        .balign 4
+        .type   systick_entry, %function
+systick_entry:
+        ldr     r1, =C_SYM(rp2350_systick_handler)
+        b       1f
+
+        .balign 4
+        .type   irq_entry, %function
+irq_entry:
+        ldr     r1, =C_SYM(rp2350_irq_handler)
+1:      mov     r0, sp
+        ldr     r2, =irq_stack_top
+        mov     sp, r2
+        push    {r0, lr}
+        blx     r1
+        pop     {r0, lr}
+        mov     sp, r0
+        bx      lr
+
+        .bss
+        .balign 8
+        .globl  C_SYM(irq_stack_bottom)     // for the bring-up monitor
+C_SYM(irq_stack_bottom):
+        .space  4096
+irq_stack_top:

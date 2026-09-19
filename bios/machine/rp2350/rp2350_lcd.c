@@ -123,8 +123,8 @@ static const UWORD lcd_prog[] = {
                                  * ILI9341 write clock limit is 10 MHz */
 
 /* touch calibration: raw XPT2046 readings at the screen edges */
-#define TOUCH_X_LEFT    3800
-#define TOUCH_X_RIGHT   300
+#define TOUCH_X_LEFT    300     /* with TOUCH_SWAP_XY: raw X at the top */
+#define TOUCH_X_RIGHT   3800    /* ... and at the bottom */
 #define TOUCH_Y_TOP     300
 #define TOUCH_Y_BOTTOM  3800
 #define TOUCH_SWAP_XY   1       /* raw X runs along the screen's y axis */

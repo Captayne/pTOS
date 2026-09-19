@@ -63,6 +63,26 @@ static void dump(const char *what, int vector, ULONG *frame, ULONG fsr, ULONG fa
             armv8m_debug_putc('0' + i - 10);
         putreg("=", frame[i]);
     }
+
+    /* the stack from the exception frame up: shows what was being
+     * returned to, where the registers alone do not */
+    {
+        const ULONG *p = (const ULONG *)(frame[13] - 32);
+
+        if ((ULONG)p >= 0x20000000UL && (ULONG)p < 0x20082000UL - 32 * 4)
+        {
+            for (i = 0; i < 32; i++)
+            {
+                if (i % 8 == 0)
+                {
+                    putstr("\r\n");
+                    puthex((ULONG)(p + i));
+                    putstr(":");
+                }
+                putreg(" ", p[i]);
+            }
+        }
+    }
     putstr("\r\n");
 }
 

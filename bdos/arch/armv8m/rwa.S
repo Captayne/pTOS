@@ -63,9 +63,14 @@ ASM_FUNC(enter):
         beq     x20
 
         // The arguments go below the resume record, which may be below
-        // the active stack pointer: no interrupts until sp has moved on.
+        // the active stack pointer.  Masking interrupts is not enough (the
+        // NMI of the bring-up monitor still pushes its frame there), so
+        // the stack pointer is first moved below them.
         cpsid   i
         sub     r12, r12, #32
+        cmp     sp, r12
+        it      hi
+        movhi   sp, r12
         stm     r12, {r0-r7}            // arguments, below the resume record
 
         ldr     r1, =C_SYM(run)

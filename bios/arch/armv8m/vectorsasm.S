@@ -78,6 +78,11 @@ ASM_FUNC(armv8m_svc_handler):
         ite     eq
         mrseq   r0, msp
         mrsne   r0, psp                 // r0 -> caller's exception frame
+        // Everything below is written below the active main stack pointer.
+        // PRIMASK does not keep the NMI (the bring-up monitor) from pushing
+        // its frame there, so first move the main stack pointer below all
+        // of it (at most 64 bytes: record, alignment, slot, frame).
+        sub     sp, sp, #64
         ldr     r1, [r0, #24]           // return address
         ldrb    r1, [r1, #-2]           // imm8 of the svc instruction
         cmp     r1, #255
@@ -93,7 +98,7 @@ ASM_FUNC(armv8m_svc_handler):
         tst     lr, #4
         ite     eq
         mrseq   r1, psp                 // caller on MSP: other stack is PSP
-        mrsne   r1, msp                 // caller on PSP: other stack is MSP
+        addne   r1, sp, #64             // caller on PSP: other stack is MSP
         str     r1, [r12, #4]
         mrs     r1, control
         orr     r1, r1, r3, lsl #31     // keep PRIMASK in bit 31
@@ -105,7 +110,7 @@ ASM_FUNC(armv8m_svc_handler):
         tst     lr, #4
         ite     eq
         moveq   r3, r12
-        mrsne   r3, msp
+        addne   r3, sp, #64
         bic     r3, r3, #7              // 8-byte aligned frame, no padding
         str     r12, [r3, #-8]!         // record address, for the trampoline
         sub     r3, r3, #32             // fabricated exception frame

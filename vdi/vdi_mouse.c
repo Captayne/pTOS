@@ -1358,8 +1358,13 @@ void cur_replace (MCS *mcs)
             dst = addr++;           /* current destination address */
             /* loop through rows */
             for (row = mcs->len - 1; row >= 0; row--) {
-                *dst = *src++;
-                *(dst + inc) = *src++;
+                /* cur_display() saved (left word << 16) | right word as a
+                 * ULONG: read it back as one, not as two UWORDs, which
+                 * would swap the words on little-endian machines */
+                ULONG bits = *(ULONG *)src;
+                src += 2;
+                *dst = (UWORD)(bits >> 16);
+                *(dst + inc) = (UWORD)bits;
                 dst += dst_inc;     /* next row of screen */
             }
         }
