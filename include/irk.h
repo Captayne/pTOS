@@ -31,6 +31,21 @@
  * once at startup and keep the pointer; check `version` and `size` before
  * using anything added after version 1.
  *
+ * NOT EVERY CALL EXISTS EVERYWHERE
+ *
+ * A pointer in this structure may be **null**, and that is the answer to
+ * "can I do this here", not a fault.  Seen from the system core, a call
+ * that would wait -- sema_wait(), queue_send(), queue_recv() -- is null,
+ * because waiting there is the AES' business: a GEM program waits in
+ * evnt_multi(), and a wait ordered across to the real-time core would
+ * stop the runtime that serves the request.  yield() and delay_us() are
+ * null there for the same reason, and so is notify(), which a headless
+ * task uses to reach *upwards*.
+ *
+ * Inside a task on the real-time core everything is there.  Ask core()
+ * if you want to know which side you are on, or simply test the pointer
+ * you are about to use.
+ *
  * THE TWO HALVES
  *
  * A program is one GEM task on the system core.  If it wants a second
@@ -142,11 +157,18 @@ struct irk_api {
      *
      *   fn     the body; it gets `arg` and must not return except to end
      *   prio   share of the processor, IRK_PRIO_MIN upwards
-     *   stack  memory for its stack -- the program's own, so that it
-     *          dies with the program.  Not shared with anything else.
-     *   size   size of that memory in bytes.  A headless task needs
-     *          little; measure with stack_free() rather than guess.
-     *   name   up to 8 characters for diagnostics, or 0
+     *   stack  memory for its stack, or 0 to let the kernel serve it.
+     *          On the real-time core the kernel's own pool is used and
+     *          this is ignored: that memory is in the faster bank, and
+     *          it cannot be taken away when your program's memory is
+     *          reclaimed.  The parameter is kept for the day a task can
+     *          run on the system core, where your own memory is right.
+     *   size   how much stack the task needs, in bytes, or 0 for the
+     *          default.  A headless task needs little; find out with
+     *          stack_free() rather than guessing generously.
+     *   name   up to 8 characters for diagnostics, or 0.  Not carried
+     *          across from the system core: the text would have to stay
+     *          put for the life of the task.
      *
      * Returns the handle, or IRK_NONE if the core has no room, the stack
      * is too small, or there is no such core.

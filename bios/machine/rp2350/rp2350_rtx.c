@@ -21,6 +21,7 @@
 #include "emutos.h"
 #include "rp2350.h"
 #include "cookie.h"
+#include "irk.h"
 #include "rtx.h"
 #include "rtx_rp2350.h"
 #include "rp2350_rtx.h"
@@ -151,6 +152,210 @@ const char *rp2350_rtx_name(void)
     return runtime_state ? runtime_state : "none";
 }
 
+/*========================================================================*\
+ *  _IRK: the multitasking interface, as it reaches the system core
+ *
+ *  Every call here is a mailbox command, so a program on this core can
+ *  create, steer and question tasks on the real-time core, and exchange
+ *  items with them -- but it never waits on the kernel.  Waiting belongs
+ *  to the tasks over there; a wait ordered from here would block the
+ *  runtime's own main task, which is what serves this mailbox.
+ *
+ *  Calls that would wait are therefore NULL in this binding, and so are
+ *  the ones that only make sense inside a task.  A program checks a
+ *  pointer before it uses it, or asks core() first.
+ *
+ *  One mailbox serves everyone.  That is safe while the AES switches
+ *  cooperatively and nothing in irk_call() gives way -- the same reason
+ *  a GEMDOS call is atomic today.  When the system core gains real
+ *  multitasking, this needs a lock, and that is the moment to add one:
+ *  not before, when it would only be untested weight.
+\*========================================================================*/
+
+static long irk_call(ULONG cmd, ULONG a0, ULONG a1, ULONG a2, ULONG a3)
+{
+    return rtx_call(cmd, a0, a1, a2, a3);
+}
+
+static unsigned short irk_core(void)
+{
+    return IRK_CORE_SYSTEM;
+}
+
+static unsigned short irk_cores(void)
+{
+    return runtime_up ? 2 : 1;
+}
+
+static irk_handle irk_task_new(unsigned short core, irk_entry fn, void *arg,
+                               unsigned short prio,
+                               void *stack, unsigned long size,
+                               const char *name)
+{
+    long rc;
+
+    /* Tasks on the system core would each need their own GEMDOS context;
+       see docs/multitasking.md.  Until then, the real-time core only. */
+    if (core != IRK_CORE_RT)
+        return IRK_NONE;
+
+    /* The stack comes from the real-time core's own pool: it sits in the
+       fast bank, and it cannot be pulled away when this program's memory
+       is reclaimed.  The size is passed so that the runtime can refuse a
+       request its pool cannot serve; a name would have to stay valid for
+       the life of the task, so it is not carried across. */
+    (void)stack;
+    (void)name;
+
+    rc = irk_call(RTX_CMD_TASK_NEW, (ULONG)fn, (ULONG)arg, prio, size);
+    return (rc > 0) ? (irk_handle)rc : IRK_NONE;
+}
+
+static long irk_task_kill(irk_handle t)
+{
+    return irk_call(RTX_CMD_TASK_KILL, t, 0, 0, 0);
+}
+
+static long irk_task_suspend(irk_handle t)
+{
+    return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_SUSPEND, 0, 0);
+}
+
+static long irk_task_resume(irk_handle t)
+{
+    return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_RESUME, 0, 0);
+}
+
+static long irk_set_prio(irk_handle t, unsigned short prio)
+{
+    return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_SET_PRIO, prio, 0);
+}
+
+static long irk_get_prio(irk_handle t)
+{
+    return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_GET_PRIO, 0, 0);
+}
+
+static long irk_set_cyclic(irk_handle t, unsigned long period_us,
+                           unsigned long start_after_us)
+{
+    return irk_call(RTX_CMD_TASK_CYCLIC, t, period_us, start_after_us, 0);
+}
+
+static long irk_set_normal(irk_handle t, unsigned short prio)
+{
+    return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_NORMAL, prio, 0);
+}
+
+static unsigned long irk_now_us(void)
+{
+    return TIMER0_TIMERAWL;
+}
+
+static irk_handle irk_sema_new(long count)
+{
+    long rc = irk_call(RTX_CMD_SEMA_NEW, (ULONG)count, 0, 0, 0);
+
+    return (rc > 0) ? (irk_handle)rc : IRK_NONE;
+}
+
+static long irk_sema_free(irk_handle s)
+{
+    return irk_call(RTX_CMD_SEMA_FREE, s, 0, 0, 0);
+}
+
+static long irk_sema_try(irk_handle s)
+{
+    return irk_call(RTX_CMD_SEMA_OP, s, RTX_SEM_TRY, 0, 0);
+}
+
+static long irk_sema_signal(irk_handle s)
+{
+    return irk_call(RTX_CMD_SEMA_OP, s, RTX_SEM_SIGNAL, 0, 0);
+}
+
+static irk_handle irk_queue_new(void *storage, unsigned short items,
+                                unsigned short itemsize)
+{
+    long rc = irk_call(RTX_CMD_QUEUE_NEW, (ULONG)storage, items, itemsize, 0);
+
+    return (rc > 0) ? (irk_handle)rc : IRK_NONE;
+}
+
+static long irk_queue_free(irk_handle q)
+{
+    return irk_call(RTX_CMD_QUEUE_FREE, q, 0, 0, 0);
+}
+
+static long irk_queue_try_send(irk_handle q, const void *item)
+{
+    return irk_call(RTX_CMD_QUEUE_OP, q, RTX_Q_TRY_SEND, (ULONG)item, 0);
+}
+
+static long irk_queue_try_recv(irk_handle q, void *item)
+{
+    return irk_call(RTX_CMD_QUEUE_OP, q, RTX_Q_TRY_RECV, (ULONG)item, 0);
+}
+
+static long irk_queue_count(irk_handle q)
+{
+    return irk_call(RTX_CMD_QUEUE_OP, q, RTX_Q_COUNT, 0, 0);
+}
+
+static long irk_stack_free(irk_handle t)
+{
+    return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_STACK, 0, 0);
+}
+
+static unsigned long irk_runtime_us(irk_handle t)
+{
+    long rc = irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_RUNTIME, 0, 0);
+
+    return (rc < 0) ? 0UL : (unsigned long)rc;
+}
+
+static const struct irk_api irk_api = {
+    IRK_API_VERSION,
+    sizeof(struct irk_api),
+
+    irk_core,
+    irk_cores,
+
+    irk_task_new,
+    irk_task_kill,
+    irk_task_suspend,
+    irk_task_resume,
+    NULL,                       /* task_self: the caller is not a task  */
+    irk_set_prio,
+    irk_get_prio,
+    irk_set_cyclic,
+    irk_set_normal,
+
+    NULL,                       /* yield:    use the AES on this core   */
+    NULL,                       /* delay_us: use evnt_timer()           */
+    irk_now_us,
+
+    irk_sema_new,
+    irk_sema_free,
+    NULL,                       /* sema_wait: would block the runtime   */
+    irk_sema_try,
+    irk_sema_signal,
+
+    irk_queue_new,
+    irk_queue_free,
+    NULL,                       /* queue_send: would block the runtime  */
+    NULL,                       /* queue_recv: would block the runtime  */
+    irk_queue_try_send,
+    irk_queue_try_recv,
+    irk_queue_count,
+
+    NULL,                       /* notify: from a headless task upwards */
+
+    irk_stack_free,
+    irk_runtime_us
+};
+
+
 /* called when the cookie jar is filled */
 void rp2350_rtx_init(void)
 {
@@ -180,6 +385,7 @@ void rp2350_rtx_init(void)
     runtime_up = TRUE;
     runtime_state = image->name;
     cookie_add(RTX_COOKIE, (ULONG)&rtx_api);
+    cookie_add(IRK_COOKIE, (ULONG)&irk_api);
     KINFO(("rtx: runtime \"%s\" running on core 1\n", image->name));
 }
 
