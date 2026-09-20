@@ -30,6 +30,7 @@
 /* UDA struct */
 #define UDA_INSUPER     #UDA_u_insuper        /* offset 0: the 'in supervisor' flag */
 #define UDA_REGS        #UDA_u_regs           /* registers r0-r? */
+#define UDA_FPREGS      #UDA_u_fpregs         /* s16..s31 */
 #define UDA_SPSUPER     #UDA_u_spsuper        /* ssp */
 #define UDA_SPUSER      #UDA_u_spuser         /* usp */
 #define UDA_OLDSPSUPER  #UDA_u_oldspsuper     /* ssp when AES trap is entered */

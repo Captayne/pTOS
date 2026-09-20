@@ -84,8 +84,20 @@ ASM_FUNC(main):
         msr     msp, r0
         mov     r0, #0
         msr     psp, r0
-        msr     control, r0             // privileged, main stack, no FPU
+        msr     control, r0             // privileged, main stack
         isb
+
+#if defined(__ARM_FP) && (__ARM_FP > 0)
+        // Let the coprocessor be touched at all.  CPACR is privileged, so
+        // no program can do this for itself, and the very first floating
+        // point instruction anywhere would fault without it.
+        ldr     r0, =ARMV8M_SCB_CPACR
+        ldr     r1, [r0]
+        orr     r1, r1, #(0xF << 20)    // CP10 and CP11, full access
+        str     r1, [r0]
+        dsb
+        isb
+#endif
 
         ldr     r0, =rp2350_vectors
         ldr     r1, =ARMV8M_SCB_VTOR
