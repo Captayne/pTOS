@@ -315,12 +315,20 @@ static long irk_stack_free(irk_handle t)
  *  than asking.  -1 means nobody is listening, and a notification is
  *  then dropped rather than kept for whoever comes along next.
  */
-static WORD notify_pid = -1;
-static BOOL note_seen;
+/*
+ * Who gets the notifications, as apid + 1 -- zero means nobody has asked.
+ *
+ * Not "= -1": this image copies no .data to RAM (the build says so on
+ * every run, "The DATA segment is not empty"), so a variable with an
+ * initial value stays in flash, every write to it is quietly dropped and
+ * every read gives the initial value back.  And zero cannot mean nobody
+ * on its own, because apid 0 is a perfectly good process.
+ */
+static UWORD notify_pid;
 
 static long irk_notify_to(unsigned short apid)
 {
-    notify_pid = (WORD)apid;
+    notify_pid = (UWORD)(apid + 1);
     return IRK_OK;
 }
 
@@ -336,22 +344,13 @@ static WORD irk_extmsg(WORD *msg)
     if (!runtime_up || !mailbox->note)
         return -1;
 
-    /* Bring-up aid: say once that one arrived, and once where it went.
-       Delivery happens in the AES dispatcher, where a print on every
-       call would drown the machine. */
-    if (!note_seen)
-    {
-        note_seen = 1;
-        KINFO(("irk: first notification, pid %d\n", notify_pid));
-    }
-
     task = mailbox->note_task;
     a = mailbox->note_a;
     b = mailbox->note_b;
     __asm__ volatile ("dmb" ::: "memory");
     mailbox->note = 0;                  /* room for the next one */
 
-    if (notify_pid < 0)
+    if (notify_pid == 0)
         return -1;                      /* nobody asked for these */
 
     msg[0] = IRK_MSG;
@@ -362,7 +361,7 @@ static WORD irk_extmsg(WORD *msg)
     msg[5] = (WORD)a;
     msg[6] = (WORD)(b >> 16);
     msg[7] = (WORD)b;
-    return notify_pid;
+    return (WORD)(notify_pid - 1);
 }
 
 static struct irk_api *irk_rt_api(void)
