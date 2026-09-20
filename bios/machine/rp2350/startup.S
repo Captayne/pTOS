@@ -95,6 +95,17 @@ ASM_FUNC(main):
         ldr     r1, [r0]
         orr     r1, r1, #(0xF << 20)    // CP10 and CP11, full access
         str     r1, [r0]
+
+        // Probe: no automatic floating point state on exception entry.
+        // With ASPEN set, the very first VFP instruction anywhere -- and
+        // the compiler uses them for plain 64-bit moves -- makes every
+        // later exception reserve 18 words beyond the usual 8.  Every
+        // stack in the system is measured for the small frame.
+        ldr     r0, =0xe000ef34         // FPCCR
+        ldr     r1, [r0]
+        bic     r1, r1, #(3 << 30)      // ASPEN and LSPEN off
+        str     r1, [r0]
+
         dsb
         isb
 #endif
