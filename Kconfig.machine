@@ -387,8 +387,21 @@ config CPUFLAGS
 	default "-march=armv7-a -marm -mfpu=neon-vfpv4 -mfloat-abi=hard" if TARGET_RPI2
 	default "-march=armv8-a -mtune=cortex-a53 -marm -mfpu=neon-fp-armv8 -mfloat-abi=hard" if TARGET_RPI3
 	default "-march=armv8-a -mtune=cortex-a72 -marm -mfpu=neon-fp-armv8 -mfloat-abi=hard" if TARGET_RPI4
-	# Soft float: the kernel has no use for the FPU, and leaving it off keeps
-	# every exception frame the plain 8-word one (no lazy FP stacking).
+	# Soft float for the operating system itself, on purpose, although both
+	# cores have an FPU and programs are built to use it.
+	#
+	# The moment any code sets FPCA, exception entry lays down 26 words
+	# instead of 8 -- and this port builds and edits those frames by hand:
+	# proc_go() lays one out itself, and the SVC redirect reaches into
+	# another.  They expect the small one.  Keeping the kernel away from the
+	# unit keeps FPCA clear, so the frames stay as they were, and no
+	# interrupt handler can disturb the registers of a program that is in
+	# the middle of a calculation.
+	#
+	# What a program needs is provided all the same: CPACR is unlocked at
+	# start-up (bios/machine/rp2350/startup.S), and the AES keeps s16..s31
+	# across a process switch (aes/arch/armv8m/gemasm.S).  Both are
+	# assembler and need no flag here.
 	default "-mcpu=cortex-m33 -mthumb -mfloat-abi=soft" if MACHINE_RP2350
 	default "-mcpu=5474" if MACHINE_FIREBEE
 	default "-mcpu=5475" if MACHINE_M548X
