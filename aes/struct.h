@@ -82,6 +82,13 @@ struct uda                  /* user stack data area */
 {
         WORD    u_insuper;              /*   0  in supervisor flag       */
         ULONG   u_regs[15];             /*   2  d0-d7, a0-a6 - ARM: r0-r11, +padding */
+#ifdef __arm__
+        ULONG   u_fpregs[16];           /*      s16..s31, if the FPU is in use.
+                                           Callee-saved under AAPCS, and this
+                                           switch is a call: without them a
+                                           process loses its floating point
+                                           state whenever it gives way. */
+#endif
         ULONG   *u_spsuper;             /*  3E  supervisor stack         */
         ULONG   *u_spuser;              /*  42  user stack               */
         ULONG   *u_oldspsuper;          /*  46  old ssp, used in trapaes [gemdosif.S] */
