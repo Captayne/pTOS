@@ -307,6 +307,13 @@ static long irk_stack_free(irk_handle t)
     return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_STACK, 0, 0);
 }
 
+static struct irk_api *irk_rt_api(void)
+{
+    if (!runtime_up || mailbox->magic != RTX_MAILBOX_MAGIC)
+        return NULL;
+    return (struct irk_api *)mailbox->api;
+}
+
 static unsigned long irk_runtime_us(irk_handle t)
 {
     long rc = irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_RUNTIME, 0, 0);
@@ -352,7 +359,9 @@ static const struct irk_api irk_api = {
     NULL,                       /* notify: from a headless task upwards */
 
     irk_stack_free,
-    irk_runtime_us
+    irk_runtime_us,
+
+    irk_rt_api
 };
 
 

@@ -101,6 +101,10 @@ struct rtx_mailbox {
     volatile long          result;
     volatile unsigned long status[6];   /* struct rtx_status, for STATUS */
     volatile unsigned long fault[4];    /* runtime fault: ipsr, pc, lr, cfsr */
+    /* struct irk_api as it exists on the real-time core: the one a
+     * headless task uses, since the system core's binding would
+     * only send it back across the mailbox.  Written at start-up. */
+    volatile unsigned long api;
 };
 
 #endif /* __ASSEMBLER__ */
