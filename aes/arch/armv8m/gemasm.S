@@ -109,7 +109,9 @@ savestate:
         pop     {r4-r7}                 // the caller's r0-r3
         stmia   r2, {r4-r7}             // (lr stays on the stack for switchto)
 
-#if defined(__ARM_FP) && (__ARM_FP > 0)
+#ifdef MACHINE_RP2350
+        .fpu    fpv5-sp-d16             // the unit is there whatever the
+                                        // C flags say; only programs use it
         add     r2, r1, UDA_FPREGS
         vstmia  r2, {s16-s31}           // callee-saved, and this is a call
 #endif
@@ -156,7 +158,7 @@ ASM_FUNC(switchto):
 2:      msr     control, r1
         isb
 
-#if defined(__ARM_FP) && (__ARM_FP > 0)
+#ifdef MACHINE_RP2350
         add     r1, r0, UDA_FPREGS
         vldmia  r1, {s16-s31}
 #endif
