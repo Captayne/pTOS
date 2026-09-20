@@ -37,6 +37,7 @@
 #include "gemasm.h"
 #include "rectfunc.h"
 #include "gemctrl.h"
+#include "sched_abi.h"
 
 
 #define THEDESK 3       /* MUST be the same value as DESKMENU in desk/desk_rsc.h */
@@ -102,7 +103,7 @@ static void ct_msgup(WORD message, AESPD *owner, WORD wh, WORD m1, WORD m2, WORD
     if (!((message == WM_CLOSED) && (D.w_win[wh].w_kind & HOTCLOSE)))
     {
         while(button & 0x0001)
-            dsptch();
+            k_yield();
     }
 }
 
@@ -137,7 +138,7 @@ static void handle_arrow_msg(WORD w_handle, WORD gadget)
                 p->p_msg.wh = w_handle;
             }
         }
-        dsptch();
+        k_yield();
     } while(button & 0x0001);
 
     wm_update(BEG_UPDATE);      /* take back the screen */
@@ -156,7 +157,7 @@ static void perform_untop(WORD wh)
     ct_msgup(WM_UNTOPPED, D.w_win[wh].w_owner, wh, 0, 0, 0, 0);
 
     for (i = 0; i < num_accs; i++)
-        dsptch();
+        k_yield();
 }
 
 

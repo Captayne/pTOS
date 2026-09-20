@@ -61,6 +61,7 @@
 #include "biosdefs.h"
 #include "kprint.h"
 #include "asm.h"
+#include "sched_abi.h"
 
 extern LONG init_p0_stkptr(void); /* called only from gemstart.S */
 extern void run_accs_and_desktop(void); /* called only from gemstart.S */
@@ -590,7 +591,7 @@ void all_run(void)
     /* let all the acc's run*/
     for (i = 0; i < num_accs; i++)
     {
-        dsptch();
+        k_yield();
     }
     /* then get in the wait line */
     wm_update(BEG_UPDATE);
@@ -774,7 +775,7 @@ void run_accs_and_desktop(void)
     build_root_path(D.s_cdir, 'A'+dos_gdrv());  /* root of current drive */
     isgem = process_inf2(&isauto);  /* process emudesk.inf part 2 */
 
-    dsptch();                       /* off we go !!! */
+    k_yield();                      /* off we go !!! */
     wait_for_accs(AP_MESAG);        /* wait until DAs have initialised */
 
     sh_main(isauto, isgem);         /* main shell loop */

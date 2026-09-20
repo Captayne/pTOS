@@ -5,6 +5,8 @@
 obj-y += gemasm.o gemstart.o gemdosif.o
 obj-$(ARCH_ARM) += gemdosifc.o
 
+obj-y += sched_aes.o
+
 obj-y += gemaplib.o gemasync.o gemctrl.o gemdisp.o gemevlib.o gemflag.o \
 	 gemfmalt.o gemfmlib.o gemfslib.o gemgraf.o gemgrlib.o gemgsxif.o \
 	 geminit.o geminput.o gemmnlib.o gemobed.o gemobjop.o gemoblib.o \
