@@ -87,7 +87,6 @@ ASM_FUNC(main):
         msr     control, r0             // privileged, main stack
         isb
 
-#if defined(__ARM_FP) && (__ARM_FP > 0)
         // Let the coprocessor be touched at all.  CPACR is privileged, so
         // no program can do this for itself, and the very first floating
         // point instruction anywhere would fault without it.
@@ -96,11 +95,19 @@ ASM_FUNC(main):
         orr     r1, r1, #(0xF << 20)    // CP10 and CP11, full access
         str     r1, [r0]
 
-        // Probe: no automatic floating point state on exception entry.
-        // With ASPEN set, the very first VFP instruction anywhere -- and
-        // the compiler uses them for plain 64-bit moves -- makes every
-        // later exception reserve 18 words beyond the usual 8.  Every
-        // stack in the system is measured for the small frame.
+        // No automatic floating point state on exception entry.
+        //
+        // With ASPEN set, the first VFP instruction anywhere makes every
+        // later exception lay down 26 words instead of 8 -- and this port
+        // builds and edits those frames by hand (proc_go(), and the SVC
+        // redirect in vectorsasm.S).  They expect the small one.
+        //
+        // That is safe only because the operating system itself is built
+        // without floating point and never touches the unit, so nothing
+        // an interrupt runs can disturb the registers of a program that
+        // is in the middle of a calculation.  The AES keeps s16..s31
+        // across a process switch by hand; s0..s15 belong to the caller
+        // and no handler of ours writes them.
         ldr     r0, =0xe000ef34         // FPCCR
         ldr     r1, [r0]
         bic     r1, r1, #(3 << 30)      // ASPEN and LSPEN off
@@ -108,7 +115,6 @@ ASM_FUNC(main):
 
         dsb
         isb
-#endif
 
         ldr     r0, =rp2350_vectors
         ldr     r1, =ARMV8M_SCB_VTOR
