@@ -28,6 +28,7 @@
 
 #include "geminput.h"
 #include "gempd.h"
+#include "extmsg.h"
 #include "gemgsxif.h"
 #include "gemaplib.h"
 #include "geminit.h"
@@ -35,6 +36,9 @@
 #include "gemasm.h"
 #include "optimize.h"
 #include "gemdosif.h"
+#include "gemqueue.h"
+#include "gempd.h"
+#include "extmsg.h"
 
 #include "asm.h"
 
@@ -178,6 +182,27 @@ void chkkbd(void)
 }
 
 
+/*
+ *  A device with something to say to an application fills this in; the
+ *  AES asks, rather than the device reaching in.  It returns the process
+ *  id to deliver to and fills a 16-byte message, or -1 when there is
+ *  nothing.  Left null on machines where nothing does this.
+ */
+WORD (*aes_extmsg)(WORD *msg);
+
+static void take_extmsg(void)
+{
+    WORD msg[8];
+    WORD pid;
+
+    if (aes_extmsg == NULL)
+        return;
+
+    while ((pid = (*aes_extmsg)(msg)) >= 0)
+        msg_post(fpdnm(NULL, (UWORD)pid), msg);
+}
+
+
 static void schedule(void)
 {
     AESPD *p;
@@ -189,6 +214,8 @@ static void schedule(void)
     {
         /* poll the keyboard    */
         chkkbd();
+        /* and anything a device left for an application */
+        take_extmsg();
         /* now move drl processes to rlr */
         while (drl)
         {

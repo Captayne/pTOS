@@ -82,6 +82,42 @@ static void doq(WORD donq, AESPD *p, QPB *m)
 }
 
 
+/*
+ *  Put a message into a process' pipe without waiting.
+ *
+ *  ap_rdwr() blocks its caller when the pipe is full, which is right for
+ *  an application and impossible for anyone running in the scheduler's
+ *  own context -- there is no caller there to block.  This one refuses
+ *  instead, and whoever asked has to make do with that: the sender
+ *  coalesces, so nothing is lost but an intermediate value.
+ *
+ *  Returns 1 when the message was taken, 0 when there was no room.
+ */
+WORD msg_post(AESPD *p, const WORD *msg)
+{
+    EVB *e;
+
+    if (p == NULL || (QUEUE_SIZE - p->p_qindex) < 16)
+        return 0;
+
+    memcpy(p->p_qaddr + p->p_qindex, msg, 16);
+    p->p_qindex += 16;
+
+    /* Hand it straight to a reader that is already waiting, exactly as
+       aqueue() does; otherwise it stays in the pipe until one asks. */
+    if ((e = p->p_qdq) != 0)
+    {
+        e->e_flag |= NOCANCEL;
+        p->p_qdq = e->e_link;
+        if (e->e_link)
+            e->e_link->e_pred = e->e_pred;
+        doq(0, p, (QPB *)e->e_parm);
+        azombie(e, 1);
+    }
+    return 1;
+}
+
+
 void aqueue(WORD isqwrite, EVB *e, LONG lm)
 {
     AESPD   *p;

@@ -11,5 +11,6 @@
 #define GEMQUEUE_H
 
 void aqueue(WORD isqwrite, EVB *e, LONG lm);
+WORD msg_post(AESPD *p, const WORD *msg);
 
 #endif
