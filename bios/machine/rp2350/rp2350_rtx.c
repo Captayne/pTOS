@@ -22,6 +22,7 @@
 #include "rp2350.h"
 #include "cookie.h"
 #include "irk.h"
+#include "extmsg.h"
 #include "rtx.h"
 #include "rtx_rp2350.h"
 #include "rp2350_rtx.h"
@@ -307,6 +308,53 @@ static long irk_stack_free(irk_handle t)
     return irk_call(RTX_CMD_TASK_CTL, t, RTX_CTL_STACK, 0, 0);
 }
 
+/*
+ *  Where notifications go.  A program says so once, after appl_init(),
+ *  with the id that call gave it: the runtime cannot know which GEM
+ *  application a headless task belongs to, and guessing would be worse
+ *  than asking.  -1 means nobody is listening, and a notification is
+ *  then dropped rather than kept for whoever comes along next.
+ */
+static WORD notify_pid = -1;
+
+static long irk_notify_to(unsigned short apid)
+{
+    notify_pid = (WORD)apid;
+    return IRK_OK;
+}
+
+/*
+ *  Called by the AES from its dispatcher, never from an interrupt: it
+ *  asks whether a device has a message for an application.  Returns the
+ *  process id, or -1 when there is nothing.
+ */
+static WORD irk_extmsg(WORD *msg)
+{
+    ULONG task, a, b;
+
+    if (!runtime_up || !mailbox->note)
+        return -1;
+
+    task = mailbox->note_task;
+    a = mailbox->note_a;
+    b = mailbox->note_b;
+    __asm__ volatile ("dmb" ::: "memory");
+    mailbox->note = 0;                  /* room for the next one */
+
+    if (notify_pid < 0)
+        return -1;                      /* nobody asked for these */
+
+    msg[0] = IRK_MSG;
+    msg[1] = 0;                         /* not from a GEM application */
+    msg[2] = 0;                         /* no extra length */
+    msg[3] = (WORD)task;
+    msg[4] = (WORD)(a >> 16);
+    msg[5] = (WORD)a;
+    msg[6] = (WORD)(b >> 16);
+    msg[7] = (WORD)b;
+    return notify_pid;
+}
+
 static struct irk_api *irk_rt_api(void)
 {
     if (!runtime_up || mailbox->magic != RTX_MAILBOX_MAGIC)
@@ -357,6 +405,7 @@ static const struct irk_api irk_api = {
     irk_queue_count,
 
     NULL,                       /* notify: from a headless task upwards */
+    irk_notify_to,
 
     irk_stack_free,
     irk_runtime_us,
@@ -395,6 +444,7 @@ void rp2350_rtx_init(void)
     runtime_state = image->name;
     cookie_add(RTX_COOKIE, (ULONG)&rtx_api);
     cookie_add(IRK_COOKIE, (ULONG)&irk_api);
+    aes_extmsg = irk_extmsg;
     KINFO(("rtx: runtime \"%s\" running on core 1\n", image->name));
 }
 

@@ -119,10 +119,14 @@ typedef void (*irk_entry)(void *arg);
 
 /*
  * The message notify() delivers to the GEM half.  Standard AES message
- * layout: msg[0] is the number below, msg[1] the sender (0 -- it does
- * not come from a GEM application), msg[2] the extra length (0).
- * msg[3] and msg[4] carry the sending task's handle, and msg[5]..msg[7]
- * the two longs passed to notify(), high word first.
+ * layout, eight words:
+ *
+ *   msg[0]  IRK_MSG
+ *   msg[1]  0 -- it does not come from a GEM application
+ *   msg[2]  0 -- no extra length
+ *   msg[3]  the handle of the task that sent it
+ *   msg[4]  the first long, high word    msg[5]  its low word
+ *   msg[6]  the second long, high word   msg[7]  its low word
  *
  * The number is far outside the range the AES uses for itself.
  */
@@ -280,6 +284,18 @@ struct irk_api {
      * any more.
      */
     long (*notify)(unsigned long a, unsigned long b);
+
+    /*
+     * Where notifications go: the id appl_init() returned.  Call it once
+     * from the GEM half, after appl_init() and before the first task
+     * that reports.  Without it a notification is dropped -- the kernel
+     * cannot know which application a headless task belongs to, and
+     * guessing would be worse than asking.
+     *
+     * Null in the binding a headless task uses: saying where they go is
+     * the GEM half's business.
+     */
+    long (*notify_to)(unsigned short apid);
 
     /*--- what is going on ------------------------------------------*/
 

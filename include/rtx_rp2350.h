@@ -105,6 +105,15 @@ struct rtx_mailbox {
      * headless task uses, since the system core's binding would
      * only send it back across the mailbox.  Written at start-up. */
     volatile unsigned long api;
+    /* One notification from a headless task, waiting to be picked
+     * up by the system core.  Coalesced on purpose: while note is
+     * set, a further notify() replaces the payload instead of
+     * queueing another, so a task reporting every millisecond can
+     * neither flood the AES nor lose the newest values. */
+    volatile unsigned long note;        /* 0 = nothing pending */
+    volatile unsigned long note_task;
+    volatile unsigned long note_a;
+    volatile unsigned long note_b;
 };
 
 #endif /* __ASSEMBLER__ */
