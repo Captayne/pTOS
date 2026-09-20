@@ -45,6 +45,48 @@ struct rtx_image {
 #define RTX_CMD_STOP    2   /* args: task */
 #define RTX_CMD_STATUS  3   /* result in status */
 
+/*
+ * The rest carry the _IRK interface (include/irk.h) across to the
+ * real-time core.  These numbers are the ABI between the two images:
+ * append, never renumber.
+ *
+ * Only what makes sense from outside is here.  A call that waits --
+ * sema_wait(), queue_send(), queue_recv() -- belongs to tasks running on
+ * the real-time core itself; asking for it from the system core would
+ * block the runtime's own main task, which is what serves this mailbox.
+ * The system core uses the try_ forms and lets notify() tell it when
+ * there is something to look at.
+ */
+#define RTX_CMD_TASK_NEW    4   /* args: fn, arg, prio, stack size */
+#define RTX_CMD_TASK_KILL   5   /* args: handle */
+#define RTX_CMD_TASK_CTL    6   /* args: handle, RTX_CTL_*, value */
+#define RTX_CMD_TASK_CYCLIC 7   /* args: handle, period_us, start_after_us */
+#define RTX_CMD_SEMA_NEW    8   /* args: initial count */
+#define RTX_CMD_SEMA_FREE   9   /* args: handle */
+#define RTX_CMD_SEMA_OP    10   /* args: handle, RTX_SEM_* */
+#define RTX_CMD_QUEUE_NEW  11   /* args: storage, items, item size */
+#define RTX_CMD_QUEUE_FREE 12   /* args: handle */
+#define RTX_CMD_QUEUE_OP   13   /* args: handle, RTX_Q_*, item pointer */
+
+/* RTX_CMD_TASK_CTL */
+#define RTX_CTL_SUSPEND  0
+#define RTX_CTL_RESUME   1
+#define RTX_CTL_SET_PRIO 2
+#define RTX_CTL_GET_PRIO 3
+#define RTX_CTL_NORMAL   4      /* leave cyclic operation, value = prio */
+#define RTX_CTL_STACK    5      /* bytes of stack never touched */
+#define RTX_CTL_RUNTIME  6      /* microseconds of processor had, low 32 */
+
+/* RTX_CMD_SEMA_OP */
+#define RTX_SEM_SIGNAL   0
+#define RTX_SEM_TRY      1
+#define RTX_SEM_COUNT    2
+
+/* RTX_CMD_QUEUE_OP */
+#define RTX_Q_TRY_SEND   0
+#define RTX_Q_TRY_RECV   1
+#define RTX_Q_COUNT      2
+
 /* at RTX_MAILBOX_ADDR; written by the runtime at start-up */
 struct rtx_mailbox {
     volatile unsigned long magic;       /* RTX_MAILBOX_MAGIC once running */
