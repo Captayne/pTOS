@@ -34,6 +34,9 @@ void foo(void) {
 	ASMSIZE(THEGLO);
 	ASMOFFSET(UDA, u_insuper);
 	ASMOFFSET(UDA, u_regs);
+#ifdef __arm__
+	ASMOFFSET(UDA, u_fpregs);
+#endif
 	ASMOFFSET(UDA, u_spsuper);
 	ASMOFFSET(UDA, u_spuser);
 	ASMOFFSET(UDA, u_oldspsuper);

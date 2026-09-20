@@ -387,9 +387,17 @@ config CPUFLAGS
 	default "-march=armv7-a -marm -mfpu=neon-vfpv4 -mfloat-abi=hard" if TARGET_RPI2
 	default "-march=armv8-a -mtune=cortex-a53 -marm -mfpu=neon-fp-armv8 -mfloat-abi=hard" if TARGET_RPI3
 	default "-march=armv8-a -mtune=cortex-a72 -marm -mfpu=neon-fp-armv8 -mfloat-abi=hard" if TARGET_RPI4
-	# Soft float: the kernel has no use for the FPU, and leaving it off keeps
-	# every exception frame the plain 8-word one (no lazy FP stacking).
-	default "-mcpu=cortex-m33 -mthumb -mfloat-abi=soft" if MACHINE_RP2350
+	# Both cores have an FPU, and programs have use for it -- kinematics and
+	# control loops are exactly where software floating point hurts.  The
+	# price is paid on every interrupt: with the FPU in use, exception entry
+	# reserves room for the floating point frame as well, 18 words beyond the
+	# usual 8.  Lazy stacking means the space is reserved but only filled if
+	# the handler itself touches the FPU, so the cost is stack, not time.
+	#
+	# "softfp", not "hard": the instructions are used, but floating point
+	# arguments still travel in the ordinary registers, so everything still
+	# links against libraries built the old way.
+	default "-mcpu=cortex-m33 -mthumb -mfloat-abi=softfp -mfpu=fpv5-sp-d16" if MACHINE_RP2350
 	default "-mcpu=5474" if MACHINE_FIREBEE
 	default "-mcpu=5475" if MACHINE_M548X
 	default "-m68040" if MACHINE_ARANYM

@@ -67,6 +67,7 @@
 #define ARMV8M_SCB_CCR          0xe000ed14
 #define ARMV8M_SCB_SHPR2        0xe000ed1c      /* SVCall priority in bits 31:24 */
 #define ARMV8M_SCB_SHPR3        0xe000ed20      /* PendSV 23:16, SysTick 31:24 */
+#define ARMV8M_SCB_CPACR        0xe000ed88
 #define ARMV8M_SCB_SHCSR        0xe000ed24
 #define ARMV8M_SCB_CFSR         0xe000ed28
 #define ARMV8M_SCB_HFSR         0xe000ed2c
