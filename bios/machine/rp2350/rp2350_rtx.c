@@ -316,6 +316,7 @@ static long irk_stack_free(irk_handle t)
  *  then dropped rather than kept for whoever comes along next.
  */
 static WORD notify_pid = -1;
+static BOOL note_seen;
 
 static long irk_notify_to(unsigned short apid)
 {
@@ -334,6 +335,15 @@ static WORD irk_extmsg(WORD *msg)
 
     if (!runtime_up || !mailbox->note)
         return -1;
+
+    /* Bring-up aid: say once that one arrived, and once where it went.
+       Delivery happens in the AES dispatcher, where a print on every
+       call would drown the machine. */
+    if (!note_seen)
+    {
+        note_seen = 1;
+        KINFO(("irk: first notification, pid %d\n", notify_pid));
+    }
 
     task = mailbox->note_task;
     a = mailbox->note_a;

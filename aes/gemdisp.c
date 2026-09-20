@@ -189,6 +189,7 @@ void chkkbd(void)
  *  nothing.  Left null on machines where nothing does this.
  */
 WORD (*aes_extmsg)(WORD *msg);
+static BOOL extmsg_shown;
 
 static void take_extmsg(void)
 {
@@ -199,7 +200,17 @@ static void take_extmsg(void)
         return;
 
     while ((pid = (*aes_extmsg)(msg)) >= 0)
-        msg_post(fpdnm(NULL, (UWORD)pid), msg);
+    {
+        AESPD *p = fpdnm(NULL, (UWORD)pid);
+        WORD rc = msg_post(p, msg);
+
+        /* Bring-up aid: once is enough to say whether it landed. */
+        if (!extmsg_shown)
+        {
+            extmsg_shown = TRUE;
+            KINFO(("extmsg: pid %d, pd %p, posted %d\n", pid, p, rc));
+        }
+    }
 }
 
 
