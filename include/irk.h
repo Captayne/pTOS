@@ -289,6 +289,23 @@ struct irk_api {
 
     /* Microseconds this task has had the processor, low 32 bits. */
     unsigned long (*runtime_us)(irk_handle t);
+
+    /*
+     * The same interface as it exists *on the real-time core*.
+     *
+     * A headless task cannot use the pointers above: those were obtained
+     * on the system core and every one of them sends a request across to
+     * the real-time core.  Used from over there they would be a call to
+     * oneself, by way of the mailbox one is meant to be serving.
+     *
+     * So a program fetches this pointer here, hands it to its task --
+     * through the argument, or in the memory both halves share -- and
+     * the task uses that one.  In it nothing is missing: waiting is
+     * exactly what a task over there is allowed to do.
+     *
+     * Null when there is no real-time core.
+     */
+    struct irk_api *(*rt_api)(void);
 };
 
 #endif /* IRK_H */
