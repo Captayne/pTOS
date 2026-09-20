@@ -40,6 +40,7 @@
 #include "intmath.h"
 #include "string.h"
 #include "asm.h"
+#include "sched_abi.h"
 
 /* Global variables: */
 BOOL     gl_play;
@@ -164,7 +165,7 @@ void ap_tplay(const EVNTREC *pbuff,WORD length,WORD scale)
             enable_interrupts();
         }
 
-        dsptch();       /* let someone run */
+        k_yield();      /* let someone run */
     }
 
     /*

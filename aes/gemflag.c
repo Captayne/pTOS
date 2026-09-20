@@ -27,6 +27,7 @@
 #include "gemasm.h"
 #include "gemflag.h"
 #include "asm.h"
+#include "sched_abi.h"
 
 
 
@@ -132,7 +133,7 @@ void unsync(SPB *sy)
             /* restart counting semaphore */
             sy->sy_tas = 1;
             azombie(p, 0);
-            dsptch();
+            k_yield();
         }
         else
             sy->sy_owner = NULL;    /* reset owner field */

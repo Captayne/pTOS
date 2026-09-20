@@ -51,6 +51,7 @@
 #include "gemctrl.h"
 
 #include "string.h"
+#include "sched_abi.h"
 
 
 LONG super(WORD cx, AESPB *pcrys_blk);  /* called only from gemdosif.S */
@@ -116,7 +117,7 @@ static UWORD crysbind(WORD opcode, AESGLOBAL *pglobal, WORD control[], WORD int_
         break;
 #if CONF_WITH_PCGEM
     case APPL_YIELD:
-        dsptch();
+        k_yield();
         break;
 #endif
     case APPL_EXIT:
@@ -461,7 +462,7 @@ LONG super(WORD cx, AESPB *pcrys_blk)
         xif(pcrys_blk);
         FALLTHROUGH;
     case 201:           /* undocumented TOS feature */
-        dsptch();
+        k_yield();
     }
 
     return 0;

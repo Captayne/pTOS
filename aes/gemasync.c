@@ -30,6 +30,7 @@
 
 #include "string.h"
 #include "biosext.h"
+#include "sched_abi.h"
 
 
 static void signal(EVB *e)
@@ -118,10 +119,7 @@ EVSPEC mwait(EVSPEC mask)
 {
     rlr->p_evwait = mask;
     if (!(mask & rlr->p_evflg))
-    {
-        rlr->p_stat |= WAITIN;
-        dsptch();
-    }
+        k_block(K_WAIT_EVENT);
 
     return rlr->p_evflg;
 }
