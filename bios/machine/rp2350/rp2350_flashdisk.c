@@ -83,6 +83,12 @@ struct header
 };
 
 static UWORD map[FD_SECTORS];       /* logical sector -> slot, or NO_SLOT */
+
+/* The drive can be handed to the other machine over USB.  While it is
+   there it is not ours: two file systems with their own caches on one
+   medium corrupt it, and not eventually but reliably. */
+static BOOL shared_over_usb;
+static BOOL media_changed;
 static UBYTE used[FD_BLOCKS];       /* slots written in the block */
 static UBYTE valid[FD_BLOCKS];      /* of those, still current */
 static ULONG next_seq;
@@ -439,16 +445,23 @@ LONG rp2350_flashdisk_ioctl(UWORD dev, UWORD ctrl, void *arg)
         strcpy((char *)arg, "Internal flash");
         return E_OK;
     case GET_MEDIACHANGE:
+        /* Once after a handover, in either direction.  That is what
+           makes GEMDOS throw away the FAT and directory sectors it
+           holds -- the mechanism TOS has always used for a floppy
+           swap, and the reason sharing can be safe at all. */
+        if (media_changed)
+        {
+            media_changed = FALSE;
+            return MEDIACHANGE;
+        }
         return MEDIANOCHANGE;
     }
 
     return ERR;
 }
 
-LONG rp2350_flashdisk_rw(WORD rw, LONG sector, WORD count, UBYTE *buf, WORD dev)
+static LONG do_rw(WORD rw, LONG sector, WORD count, UBYTE *buf)
 {
-    if (dev != 0 || !mounted)
-        return EUNDEV;
     if (sector < 0 || (ULONG)sector + count > FD_SECTORS)
         return ESECNF;
 
@@ -468,6 +481,47 @@ LONG rp2350_flashdisk_rw(WORD rw, LONG sector, WORD count, UBYTE *buf, WORD dev)
     }
 
     return E_OK;
+}
+
+
+/*
+ * The drive as pTOS sees it.  Refused while the other machine has it.
+ */
+LONG rp2350_flashdisk_rw(WORD rw, LONG sector, WORD count, UBYTE *buf, WORD dev)
+{
+    if (dev != 0 || !mounted)
+        return EUNDEV;
+    if (shared_over_usb)
+        return EDRVNR;
+    return do_rw(rw, sector, count, buf);
+}
+
+/*
+ * And as the USB side sees it, which is the side that has it.
+ */
+LONG rp2350_flashdisk_usb_rw(WORD rw, LONG sector, WORD count, UBYTE *buf)
+{
+    if (!mounted)
+        return EUNDEV;
+    return do_rw(rw, sector, count, buf);
+}
+
+/*
+ * Hand it over, or take it back.  Either way the medium counts as
+ * changed, so whoever gets it forgets what it thought it knew.
+ */
+LONG rp2350_flashdisk_set_shared(WORD on)
+{
+    if (!mounted)
+        return EUNDEV;
+    shared_over_usb = on ? TRUE : FALSE;
+    media_changed = TRUE;
+    return E_OK;
+}
+
+LONG rp2350_flashdisk_sectors(void)
+{
+    return mounted ? (LONG)FD_SECTORS : 0;
 }
 
 #endif /* CONF_WITH_RP2350_FLASHDISK */

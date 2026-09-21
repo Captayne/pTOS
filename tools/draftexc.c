@@ -79,6 +79,9 @@ char *exclude_items[] =
 #if !CONF_WITH_TOUCH_CALIBRATION
     "TOUCITEM",
 #endif
+#if !CONF_WITH_USB_DRIVE_MENU
+    "USBDITEM",
+#endif
 #if !CONF_WITH_BLITTER
     "BLITITEM",
     "SEP_OP1",

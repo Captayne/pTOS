@@ -45,6 +45,7 @@
 #if CONF_WITH_RP2350_RTX
 #include "rp2350_rtx.h"
 #include "rp2350_usbcon.h"
+#include "rp2350_usb.h"
 #endif
 #ifdef MACHINE_AMIGA
 #include "amiga.h"
@@ -813,6 +814,9 @@ void fill_cookie_jar(void)
 #ifdef MACHINE_RP2350
     /* the USB console, for programs that need it raw (_UCN) */
     rp2350_usbcon_add_cookie();
+#if CONF_WITH_RP2350_FLASHDISK
+    rp2350_usbmsc_add_cookie();
+#endif
 #endif
 }
 

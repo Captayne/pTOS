@@ -9,6 +9,7 @@ obj-y += deskmain.o gembind.o deskact.o deskapp.o deskdir.o deskfpd.o \
 	 deskrez.o deskrsrc.o desksupp.o deskwin.o desk_rsc.o icons.o
 
 obj-$(CONF_WITH_TOUCH_CALIBRATION) += desktouch.o
+obj-$(CONF_WITH_USB_DRIVE_MENU) += deskusb.o
 
 obj-$(CONF_WITH_VDI_CICON_TEST) += cicontest_rsc.o
 

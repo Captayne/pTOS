@@ -34,6 +34,16 @@ config CONF_WITH_TOUCH_CALIBRATION
 	  a least-squares fit, saved to C:\TOUCHCAL.INF and loaded again when
 	  the desktop starts.  Works through the _TCH cookie (include/touch.h).
 
+config CONF_WITH_USB_DRIVE_MENU
+	bool "Share the flash drive over USB from the Options menu"
+	depends on CONF_WITH_RP2350_FLASHDISK
+	default y
+	help
+	  "Share flash via USB" in the Options menu: ticked, the flash drive
+	  appears as a removable disk on the machine at the other end of the
+	  USB cable and is refused here.  Works through the _UDR cookie
+	  (include/usbdrv.h).
+
 config CONF_WITH_DESKTOP_SHORTCUTS
 	bool "Desktop shortcuts"
 	default n if TARGET_192

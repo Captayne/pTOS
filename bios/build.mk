@@ -56,6 +56,7 @@ obj-$(CONF_WITH_RASPI_VSYNC_IRQ) += raspi_vsync.o
 obj-$(MACHINE_VIRT_ARM) += virt_uart.o virt_mmu.o virt_pic.o virt_timer.o
 
 obj-$(MACHINE_RP2350) += rp2350_board.o rp2350_int.o rp2350_uart.o rp2350_usbcon.o
+obj-$(MACHINE_RP2350) += rp2350_usbmsc.o
 obj-$(CONF_WITH_RP2350_MONITOR) += rp2350_monitor.o
 obj-$(CONF_WITH_RP2350_SPI) += rp2350_spi.o
 obj-$(CONF_WITH_RP2350_RTX) += rp2350_rtx.o
