@@ -486,6 +486,9 @@ obj/emutospp.ld: emutos.ld include/config.h tosvars.ld $(AUTOCONF_H)
 $(EMUTOS_IMG): $(OBJECTS) obj/emutospp.ld
 	$(LD) $(CORE_OBJ) $(LIBS) $(OPTIONAL_OBJ) $(LIBS) $(LDFLAGS) \
 	  -Wl,-Map=emutos.map -o $@
+ifeq ($(MACHINE_RP2350),y)
+	@./tools/check-no-fpu.sh $(OBJDUMP) gemasm.o $(OBJECTS)
+endif
 	@if [ $$(($$(awk '/^\.data /{print $$3}' emutos.map))) -gt 0 ]; then \
 	  echo "### Warning: The DATA segment is not empty."; \
 	  echo "### Please examine emutos.map and use \"const\" where appropriate."; \
