@@ -3,15 +3,20 @@
  *
  * Copyright (C) 2026 The pTOS development team
  *
- * MIT licence, see include/rtx.h.  This header is shared by pTOS (which
- * starts the runtime on core 1 and forwards the rtx_api calls of
- * programs to it) and by the runtime itself, which is a separate image
- * that may be under any licence.
+ * MIT licence, see include/rtx.h.  This header is shared by pTOS and by
+ * the kernel it runs on, which is a separate image that may be under any
+ * licence.
+ *
+ * The kernel boots.  It sits at the start of flash, where the bootrom
+ * looks, starts core 1 for itself and then enters pTOS on core 0 through
+ * the vector table at PTOS_IMAGE_ADDR.  pTOS forwards the rtx_api calls
+ * of programs to it.
  *
  * Layout:
- *   flash 0x10800000  runtime image, starting with struct rtx_image
- *   SRAM  0x20072000  64 KB for core 1: struct rtx_mailbox first, then
- *                     whatever the runtime wants; its stack at the top
+ *   flash 0x10000000  kernel image; struct rtx_image at RTX_IMAGE_ADDR
+ *   flash 0x10010000  pTOS (ROM_ORIGIN in emutos.ld says the same)
+ *   SRAM  0x20072000  64 KB for the kernel: struct rtx_mailbox first,
+ *                     then its code and data; core 1's stack at the top
  *                     (0x20082000, the end of SRAM9)
  * pTOS uses the SRAM below 0x20072000 only.
  */
@@ -19,12 +24,14 @@
 #ifndef RTX_RP2350_H
 #define RTX_RP2350_H
 
-#define RTX_IMAGE_ADDR      0x10800000UL
+#define KERNEL_IMAGE_ADDR   0x10000000UL
+#define RTX_IMAGE_ADDR      0x10000400UL
+#define PTOS_IMAGE_ADDR     0x10010000UL
 #define RTX_RAM_BASE        0x20072000UL
 #define RTX_RAM_END         0x20082000UL
 #define RTX_MAILBOX_ADDR    RTX_RAM_BASE
 
-#define RTX_IMAGE_MAGIC     0x31585452UL    /* "RTX1" */
+#define RTX_IMAGE_MAGIC     0x32585452UL    /* "RTX2" */
 #define RTX_MAILBOX_MAGIC   0x42585452UL    /* "RTXB" */
 
 #ifndef __ASSEMBLER__
@@ -33,10 +40,21 @@
 struct rtx_image {
     unsigned long magic;            /* RTX_IMAGE_MAGIC */
     unsigned long version;
-    unsigned long vector_table;     /* core 1's vector table */
-    unsigned long stack_top;        /* core 1's initial main stack */
-    unsigned long entry;            /* core 1's entry point (Thumb bit set) */
     char          name[44];         /* NUL terminated */
+    const struct kernel_api *api;   /* in the kernel's SRAM once it runs */
+};
+
+/*
+ * What pTOS calls in the kernel: plain function calls on core 0, in the
+ * caller's context.  Append, never reorder.
+ */
+struct kernel_api {
+    unsigned long version;
+    unsigned long size;             /* sizeof(struct kernel_api) */
+
+    /* Start core 1.  Called once, when pTOS has set up the clocks and
+       the timer.  0 on success, -1 when core 1 did not answer. */
+    long (*start_core1)(void);
 };
 
 /* mailbox commands (pTOS -> runtime) */

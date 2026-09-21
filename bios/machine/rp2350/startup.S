@@ -6,10 +6,11 @@
  * This file is distributed under the GPL, version 2 or at your
  * option any later version.  See doc/license.txt for details.
  *
- * This object is linked first, so it sits at the start of flash
- * (0x10000000).  The bootrom finds the IMAGE_DEF block below within the
- * first 4 KB, and then starts the image through the Cortex-M vector table
- * at its very beginning: initial main stack pointer, then reset handler.
+ * This object is linked first, so it sits at the start of the pTOS image
+ * (PTOS_IMAGE_ADDR).  pTOS does not boot by itself: the kernel at the
+ * start of flash does, and enters pTOS through the Cortex-M vector table
+ * below -- initial main stack pointer, then reset handler -- on core 0,
+ * privileged, with core 1 already running.
  */
 
 #include "asmdefs.h"
@@ -55,24 +56,6 @@ rp2350_vectors:
         .rept   RP2350_NUM_IRQS
         .word   irq_entry                       // external interrupts
         .endr
-
-// ==== IMAGE_DEF block ======================================================
-// A single-item block marking this as an ARM Secure executable for the
-// RP2350 (see "Binary blocks" in the RP2350 datasheet, and pico-sdk's
-// src/rp2_common/pico_crt0/embedded_start_block.inc.S).  Its link offset
-// of 0 makes it a loop of one block.
-
-        .balign 4
-image_def_block:
-        .word   0xffffded3              // PICOBIN_BLOCK_MARKER_START
-        .byte   0x42                    // PICOBIN_BLOCK_ITEM_1BS_IMAGE_TYPE
-        .byte   1                       // size in words
-        .hword  0x1021                  // EXE | Secure | ARM | RP2350
-        .byte   0xff                    // PICOBIN_BLOCK_ITEM_2BS_LAST
-        .hword  1                       // size of the items above, in words
-        .byte   0
-        .word   0                       // link to the next block: itself
-        .word   0xab123579              // PICOBIN_BLOCK_MARKER_END
 
 // ==== Reset handler ========================================================
 

@@ -61,7 +61,7 @@ ENTRY(C_SYM(os_entry))
 #if defined(MACHINE_AMIGA)
 # define ROM_ORIGIN 0x00fc0000
 #elif defined (MACHINE_RP2350)
-# define ROM_ORIGIN 0x10000000  /* QSPI flash, executed in place */
+# define ROM_ORIGIN 0x10010000  /* QSPI flash, after the kernel (PTOS_IMAGE_ADDR) */
 #elif defined (MACHINE_RPI)
 # define ROM_ORIGIN 0x00008000
 #elif defined (TARGET_CART)

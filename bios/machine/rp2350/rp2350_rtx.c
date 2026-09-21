@@ -6,11 +6,12 @@
  * This file is distributed under the GPL, version 2 or at your
  * option any later version.  See doc/license.txt for details.
  *
- * pTOS owns core 0.  Core 1 runs a separate real-time runtime image,
- * found in flash at RTX_IMAGE_ADDR (see include/rtx_rp2350.h).  pTOS
- * starts it at boot and publishes the cookie "_RTX", through which
- * programs start and stop real-time tasks on core 1 (include/rtx.h).
- * The runtime is not part of the pTOS image and may be under any licence;
+ * pTOS runs on a kernel that is not part of it: a separate image at the
+ * start of flash, which boots, starts core 1 and then enters pTOS (see
+ * include/rtx_rp2350.h).  By the time pTOS gets here core 1 is running;
+ * all that is left is to wait for it to say so and to publish the
+ * cookies "_RTX" and "_IRK", through which programs reach it
+ * (include/rtx.h, include/irk.h).  The kernel may be under any licence;
  * the two only share the contract in rtx_rp2350.h.
  *
  * The rtx_api functions run in the calling program's context (user mode
@@ -29,12 +30,6 @@
 
 #if CONF_WITH_RP2350_RTX
 
-#define SIO_FIFO_ST     RP2350_REG(RP2350_SIO_BASE + 0x50)
-#define SIO_FIFO_WR     RP2350_REG(RP2350_SIO_BASE + 0x54)
-#define SIO_FIFO_RD     RP2350_REG(RP2350_SIO_BASE + 0x58)
-#define SIO_FIFO_VLD    0x1UL
-#define SIO_FIFO_RDY    0x2UL
-
 #define TIMER0_TIMERAWL RP2350_REG(RP2350_TIMER0_BASE + 0x28)
 
 #define START_TIMEOUT_US    200000UL    /* runtime must come up within */
@@ -45,47 +40,6 @@
 
 static BOOL runtime_up;
 static const char *runtime_state;     /* NULL: not started (no .data: it is read-only) */
-
-static ULONG fifo_exchange(ULONG value)
-{
-    while (!(SIO_FIFO_ST & SIO_FIFO_RDY))
-        ;
-    SIO_FIFO_WR = value;
-    __asm__ volatile ("sev");
-    while (!(SIO_FIFO_ST & SIO_FIFO_VLD))
-        __asm__ volatile ("wfe");
-    return SIO_FIFO_RD;
-}
-
-/*
- * Launch core 1 through the bootrom's protocol (RP2350 datasheet, 5.3
- * "Launching code on processor core 1"): core 1 waits in the bootrom for
- * the sequence 0, 0, 1, vector table, stack pointer, entry point on the
- * inter-core FIFO, echoing every word; on a mismatch start over.
- */
-static void launch_core1(ULONG vtor, ULONG sp, ULONG entry)
-{
-    ULONG seq[6];
-    int i = 0;
-
-    seq[0] = 0;
-    seq[1] = 0;
-    seq[2] = 1;
-    seq[3] = vtor;
-    seq[4] = sp;
-    seq[5] = entry;
-
-    while (i < 6)
-    {
-        if (seq[i] == 0)
-        {
-            while (SIO_FIFO_ST & SIO_FIFO_VLD)  /* drain stale words */
-                (void)SIO_FIFO_RD;
-            __asm__ volatile ("sev");
-        }
-        i = (fifo_exchange(seq[i]) == seq[i]) ? i + 1 : 0;
-    }
-}
 
 /* one command through the mailbox; runs in the calling program's context */
 static long rtx_call(ULONG cmd, ULONG a0, ULONG a1, ULONG a2, ULONG a3)
@@ -430,13 +384,18 @@ void rp2350_rtx_init(void)
 
     if (image->magic != RTX_IMAGE_MAGIC)
     {
-        KINFO(("rtx: no real-time runtime in flash at %08lx\n", RTX_IMAGE_ADDR));
-        runtime_state = "none (no runtime image in flash)";
+        KINFO(("rtx: no kernel image in flash at %08lx\n", RTX_IMAGE_ADDR));
+        runtime_state = "none (no kernel image in flash)";
         return;
     }
 
-    mailbox->magic = 0;
-    launch_core1(image->vector_table, image->stack_top, image->entry);
+    /* The clocks and the timer are set up: the kernel may start core 1. */
+    if (image->api == NULL || image->api->start_core1() != 0)
+    {
+        KINFO(("rtx: kernel did not start core 1\n"));
+        runtime_state = "core 1 did not start";
+        return;
+    }
 
     start = TIMER0_TIMERAWL;
     while (mailbox->magic != RTX_MAILBOX_MAGIC)
