@@ -66,6 +66,7 @@ extern const LONG cicontest_rsc_size;
 #include "deskrez.h"
 #include "deskmain.h"
 #include "desktouch.h"
+#include "deskusb.h"
 #include "scancode.h"
 
 /* structure pointed to by return value from Keytbl() */
@@ -600,6 +601,11 @@ static void men_update(void)
 
     menu_ienable(tree, RESITEM, can_change_resolution);
 
+#if CONF_WITH_USB_DRIVE_MENU
+    menu_ienable(tree, USBDITEM, usbdrive_present());
+    menu_icheck(tree, USBDITEM, usbdrive_shared());
+#endif
+
 #if CONF_WITH_BLITTER
     if (blitter_is_present)
     {
@@ -914,6 +920,11 @@ static WORD do_optnmenu(WORD item)
 #if CONF_WITH_TOUCH_CALIBRATION
     case TOUCITEM:
         touch_calibration();
+        break;
+#endif
+#if CONF_WITH_USB_DRIVE_MENU
+    case USBDITEM:
+        usbdrive_toggle();
         break;
 #endif
     case RESITEM:

@@ -43,6 +43,7 @@
 #include "string.h"
 #include "cookie.h"
 #include "usbcon.h"
+#include "rp2350_usb.h"
 
 /* Controller registers */
 #define USB_REGS            0x50110000UL
@@ -143,9 +144,24 @@ static const UBYTE device_desc[18] = {
     1                       /* one configuration */
 };
 
-#define CONFIG_DESC_LEN 75
+/*
+ * Two functions on one port: the console, and the flash drive.  The
+ * drive's interface is always here, whether or not a program has shared
+ * the medium -- adding it on demand would mean re-enumerating, and that
+ * would drop the console the deploy terminal talks through.  Until it
+ * is shared it simply answers "no medium", as a card reader does.
+ */
+#if CONF_WITH_RP2350_FLASHDISK
+#define MSC_DESC_LEN    23
+#define NUM_INTERFACES  3
+#else
+#define MSC_DESC_LEN    0
+#define NUM_INTERFACES  2
+#endif
+
+#define CONFIG_DESC_LEN (75 + MSC_DESC_LEN)
 static const UBYTE config_desc[CONFIG_DESC_LEN] = {
-    9, DESC_CONFIG, CONFIG_DESC_LEN, 0, 2, 1, 0, 0x80, 250,
+    9, DESC_CONFIG, CONFIG_DESC_LEN, 0, NUM_INTERFACES, 1, 0, 0x80, 250,
     /* interface association: interfaces 0 and 1 form one CDC ACM function */
     8, 0x0b, 0, 2, 0x02, 0x02, 0x00, 0,
     /* interface 0: communications class, ACM, one notification endpoint */
@@ -159,6 +175,13 @@ static const UBYTE config_desc[CONFIG_DESC_LEN] = {
     9, 4, 1, 0, 2, 0x0a, 0x00, 0x00, 0,
     7, 5, 0x02, 0x02, BULK_SIZE, 0, 0,  /* EP2 OUT, bulk */
     7, 5, 0x82, 0x02, BULK_SIZE, 0, 0   /* EP2 IN, bulk */
+#if CONF_WITH_RP2350_FLASHDISK
+    ,
+    /* interface 2: mass storage, SCSI over bulk-only transport */
+    9, 4, 2, 0, 2, 0x08, 0x06, 0x50, 0,
+    7, 5, 0x03, 0x02, BULK_SIZE, 0, 0,  /* EP3 OUT, bulk */
+    7, 5, 0x83, 0x02, BULK_SIZE, 0, 0   /* EP3 IN, bulk */
+#endif
 };
 
 static const char *const strings[] = {
@@ -367,7 +390,31 @@ static void set_configuration(UWORD value)
     ep2_out_pid = 0;
     tx_busy = FALSE;
     rx_arm();
+
+#if CONF_WITH_RP2350_FLASHDISK
+    rp2350_usbmsc_init();
+#endif
 }
+
+#if CONF_WITH_RP2350_FLASHDISK
+/* The drive's endpoint is armed the same way as the console's: the
+   buffer is written without BUF_AVAIL, and only released a dozen cycles
+   later.  Releasing it in the same store loses packets. */
+void rp2350_usbcon_buf_ctrl(ULONG off, ULONG value)
+{
+    buf_ctrl_write(off, value);
+}
+
+/* The drive answers its two class requests on the control endpoint, and
+   that endpoint belongs to this file. */
+void rp2350_usbcon_ep0_send(const UBYTE *data, UWORD len, UWORD wlength)
+{
+    if (len == 0)
+        ep0_send_zlp();
+    else
+        ep0_send(data, len, wlength);
+}
+#endif
 
 static void handle_setup(void)
 {
@@ -432,6 +479,14 @@ static void handle_setup(void)
     }
     else if ((type & 0x60) == 0x20) /* class request */
     {
+#if CONF_WITH_RP2350_FLASHDISK
+        /* The drive's two requests first; everything else is the
+           console's.  One branch for both -- a second branch with the
+           same condition would never be reached, and the console would
+           answer no class request at all. */
+        if (rp2350_usbmsc_request(type, request, value, 0, length))
+            return;
+#endif
         switch (request)
         {
         case CDC_SET_LINE_CODING:
@@ -584,6 +639,18 @@ static void usb_service(void)
             tx_busy = FALSE;
             tx_kick();
         }
+#if CONF_WITH_RP2350_FLASHDISK
+        if (status & EP3_IN_BIT)
+        {
+            USB_REG(BUFF_STATUS) = EP3_IN_BIT;
+            rp2350_usbmsc_in_done();
+        }
+        if (status & EP3_OUT_BIT)
+        {
+            USB_REG(BUFF_STATUS) = EP3_OUT_BIT;
+            rp2350_usbmsc_out();
+        }
+#endif
         if (status & EP2_OUT_BIT)
         {
             USB_REG(BUFF_STATUS) = EP2_OUT_BIT;
