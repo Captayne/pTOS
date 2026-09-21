@@ -55,6 +55,10 @@ struct kernel_api {
     /* Start core 1.  Called once, when pTOS has set up the clocks and
        the timer.  0 on success, -1 when core 1 did not answer. */
     long (*start_core1)(void);
+
+    /* Start the kernel on core 0, with the caller -- pTOS -- as its main
+       task.  Called once, before start_core1().  0 on success. */
+    long (*start_core0)(void);
 };
 
 /* mailbox commands (pTOS -> runtime) */

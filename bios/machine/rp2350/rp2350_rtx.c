@@ -389,8 +389,16 @@ void rp2350_rtx_init(void)
         return;
     }
 
-    /* The clocks and the timer are set up: the kernel may start core 1. */
-    if (image->api == NULL || image->api->start_core1() != 0)
+    /* The clocks and the timer are set up: the kernel takes over core 0,
+       with pTOS as its main task, and starts core 1. */
+    if (image->api == NULL || image->api->size < sizeof(struct kernel_api)
+        || image->api->start_core0() != 0)
+    {
+        KINFO(("rtx: kernel did not start on core 0\n"));
+        runtime_state = "kernel did not start on core 0";
+        return;
+    }
+    if (image->api->start_core1() != 0)
     {
         KINFO(("rtx: kernel did not start core 1\n"));
         runtime_state = "core 1 did not start";
