@@ -27,6 +27,5 @@ extern void p_setappdir(AESPD *p, char *pfilespec);
 extern AESPD *pstart(PFVOID pcode, char *pfilespec, LONG ldaddr);
 
 /* insert the process pi at the end of the process list pointed to by root */
-extern void insert_process(AESPD *pi, AESPD **root);
 
 #endif

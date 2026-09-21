@@ -12,11 +12,9 @@
 
 #include "struct.h"
 
-/* Ready List Root - a list of AESPDs linked by the p_link field, terminated
- * by zero [see gempd.c function insert_process] */
+/* the running process (the name is historical: it headed the ready list) */
 extern AESPD    *rlr;
 
-extern AESPD    *drl, *nrl;
 extern EVB      *eul, *dlr, *zlr;
 
 /* Convert an EVB list root pointer to a fake EVB,
@@ -33,8 +31,8 @@ static __inline__ EVB *FAKE_EVB(EVB **root)
     return (EVB *)fake_evb_start;
 }
 
-/* In Dispatch - a byte whose value is zero when not in function
- * dsptch, and 1 when between dsptch ... switchto function calls */
+/* nonzero while dsptch() hands out input: a fork function that ends up
+ * in dsptch() then just returns */
 extern UBYTE    indisp;
 
 extern WORD     fpt, fph, fpcnt;                /* forkq tail, head, count */

@@ -22,7 +22,6 @@
  */
 extern AESPD    *rlr;
 
-extern AESPD    *drl, *nrl;
 extern EVB      *eul, *dlr, *zlr;
 
 /* In Dispatch - a byte whose value is zero when not in function

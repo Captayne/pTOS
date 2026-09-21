@@ -16,4 +16,9 @@ WORD forkq(FCODE fcode, LONG fdata);
 void forker(void);
 void chkkbd(void);
 
+void dsptch(void);              /* give the processor away */
+void aes_wake(AESPD *p);        /* p has what it waited for */
+void aes_sched_init(AESPD *p0);
+void aes_sched_exit(void);
+
 #endif

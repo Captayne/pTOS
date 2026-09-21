@@ -18,30 +18,19 @@
  * portions of the Software.  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT
  * WARRANTY OF ANY KIND.
  *
- * pTOS does not schedule itself.  It gives the processor away, and says
- * whether it wants it back at once or only when something wakes it.
- * Everything else -- which task runs next, how contexts are switched,
- * how time is accounted -- belongs behind this header.
+ * pTOS does not schedule itself.  It runs on a kernel, and every AES
+ * process is one of the kernel's tasks: pTOS creates them on stacks it
+ * provides, gives the processor away, waits, and wakes whoever an event
+ * is for.  Which task runs next, how contexts are switched and how time
+ * is accounted belongs to the kernel.
  *
- * Nothing of pTOS crosses the line.  No AESPD, no PD, no event block, no
- * ready list: an implementation never learns what a GEM process is, and
- * could as well be scheduling a CNC controller.  That is not politeness,
- * it is the point.  An interface shaped around one implementation, or
- * named after it, is not an interface.
+ * Nothing of pTOS crosses the line.  No AESPD, no PD, no event block: the
+ * kernel never learns what a GEM process is, and could as well be
+ * scheduling a CNC controller.  That is not politeness, it is the point.
  *
- * Two implementations:
- *
- *   sched_aes.c   the dispatcher pTOS has always had.  The default, and
- *                 complete: pTOS needs nothing else to run.
- *   sched_irk.c   IRKernel -- a separately licensed component that is
- *                 not part of pTOS.  See docs/scheduler-abi.md.
- *
- * What is covered here is the scheduling half: give away, wait, who am
- * I.  Creating and ending tasks still belongs to the AES, which builds
- * its processes with their own stacks and contexts, and waking still
- * goes through its fork ring.  Both move behind this header once a
- * backend owns the context switch -- there is no point in abstracting
- * them while only one implementation exists.
+ * On the RP2350 the kernel is IRKernel, a separate image that boots and
+ * runs pTOS; bios/machine/rp2350/rp2350_sched.c binds these calls to its
+ * call table (include/rtx_rp2350.h).
  */
 
 #ifndef SCHED_ABI_H
@@ -49,16 +38,18 @@
 
 /*
  * A task, as far as this interface is concerned: an opaque number that
- * the implementation hands out and recognises.  Zero is never a task.
+ * the kernel hands out and recognises.  Zero is never a task.
  */
 typedef unsigned long k_task_t;
 
 /*
- * Why a task stopped being runnable.  An implementation need not act on
- * this beyond "not runnable until woken"; it exists so that a diagnostic
- * can say what a task is waiting for.
+ * A new task, runnable at once, running entry() on the given stack.
+ * Zero when the kernel has no room for another.
  */
-#define K_WAIT_EVENT    1u      /* a message, a key, a timer, ... */
+k_task_t k_task_create(void (*entry)(void), void *stack, unsigned long size);
+
+/* End a task that is not the caller. */
+void k_task_kill(k_task_t task);
 
 /*
  * Give the processor away and stay runnable.  Returns once the caller
@@ -68,13 +59,21 @@ void k_yield(void);
 
 /*
  * Give the processor away and stop being runnable.  Returns only after
- * something has made the caller runnable again.
+ * k_wake() has been called for the caller.
  */
-void k_block(unsigned long reason);
+void k_block(void);
+
+/* Make a blocked task runnable again. */
+void k_wake(k_task_t task);
+
+/* The task that is running.  Never zero. */
+k_task_t k_current(void);
 
 /*
- * The task that is running.  Never zero while pTOS is running.
+ * What the kernel calls whenever no task can run: pTOS collects its input
+ * there and wakes whoever it is for.  It sleeps until the next interrupt
+ * when it has woken nobody.
  */
-k_task_t k_current(void);
+void k_set_idle(void (*idle)(void));
 
 #endif /* SCHED_ABI_H */

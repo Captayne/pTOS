@@ -25,6 +25,8 @@
 #include "geminit.h"
 #include "gemasm.h"
 #include "gempd.h"
+#include "biosext.h"
+#include "sched_abi.h"
 
 #include "string.h"
 
@@ -107,6 +109,26 @@ void p_setappdir(AESPD *pd, char *pfilespec)
 }
 
 
+/*
+ * Where every process but the first begins: it finds out which it is,
+ * and runs its code.  That code never returns.
+ */
+static void process_start(void)
+{
+    k_task_t me = k_current();
+    WORD i;
+
+    for (i = 0; i < totpds; i++)
+    {
+        if (pd_index(i)->p_task == me)
+        {
+            rlr = pd_index(i);
+            break;
+        }
+    }
+    (*rlr->p_entry)();
+}
+
 AESPD *pstart(PFVOID pcode, char *pfilespec, LONG ldaddr)
 {
     AESPD *px;
@@ -119,27 +141,14 @@ AESPD *pstart(PFVOID pcode, char *pfilespec, LONG ldaddr)
     p_nameit(px, pfilespec);
     p_setappdir(px, pfilespec);
 
-    /* set pcode to be the return address when this process runs */
-    psetup(px, pcode);
-
-    /* link him up: put it on top of the drl list */
+    /* a kernel task on the process's private AES stack, runnable at once */
+    px->p_entry = pcode;
     px->p_stat &= ~WAITIN;
-    px->p_link = drl;
-    drl = px;
+    px->p_task = k_task_create(process_start, px->p_uda->u_super,
+                               (ULONG)(&px->p_uda->u_supstk + 1)
+                               - (ULONG)px->p_uda->u_super);
+    if (!px->p_task)
+        panic("AES: no kernel task for %8.8s\n", px->p_name);
 
     return px;
-}
-
-/* put pd pi into list, *root at the end */
-void insert_process(AESPD *pi, AESPD **root)
-{
-    AESPD *p, *q;
-
-    /* find the end */
-    for (p = (q = (AESPD *)root)->p_link; p; p = (q = p)->p_link)
-        ;
-
-    /* link him in */
-    pi->p_link = p;
-    q->p_link = pi;
 }

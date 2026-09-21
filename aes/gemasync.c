@@ -30,35 +30,18 @@
 
 #include "string.h"
 #include "biosext.h"
-#include "sched_abi.h"
+#include "gemdisp.h"
 
 
 static void signal(EVB *e)
 {
-    AESPD *p, *p1, **pp1;
+    AESPD *p = e->e_pd;
 
-    p = e->e_pd;
     p->p_evflg |= e->e_mask;
 
-    /* off the not-ready list */
-    for (pp1 = &nrl, p1 = nrl; (p1 != p) && (p1); pp1 = &p1->p_link, p1 = p1->p_link)
-        ;
-
-    if (p != rlr)
-    {
-        if (p->p_evflg & p->p_evwait)
-        {
-            if (p1)
-            {
-                p1->p_stat &= ~WAITIN;
-
-                *pp1 = p1->p_link;                /* remove from nrl      */
-
-                p1->p_link = drl;                 /* onto the drl         */
-                drl = p1;
-            }
-        }
-    }
+    /* the running process finds out for itself, in dsptch() */
+    if ((p != rlr) && (p->p_stat & WAITIN) && (p->p_evflg & p->p_evwait))
+        aes_wake(p);
 }
 
 
@@ -119,7 +102,10 @@ EVSPEC mwait(EVSPEC mask)
 {
     rlr->p_evwait = mask;
     if (!(mask & rlr->p_evflg))
-        k_block(K_WAIT_EVENT);
+    {
+        rlr->p_stat |= WAITIN;
+        dsptch();
+    }
 
     return rlr->p_evflg;
 }

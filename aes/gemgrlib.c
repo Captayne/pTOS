@@ -38,7 +38,7 @@
 
 #include "intmath.h"
 #include "asm.h"
-#include "sched_abi.h"
+#include "gemdisp.h"
 
 /*
  *  Routine to watch the mouse while the button is down and it stays
@@ -52,7 +52,7 @@ static BOOL gr_stilldn(BOOL out, WORD x, WORD y, WORD w, WORD h)
     MOBLK   tmpmoblk;
     WORD    which;
 
-    k_yield();
+    dsptch();
 
     tmpmoblk.m_out = out;
     tmpmoblk.m_gr.g_x = x;

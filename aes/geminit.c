@@ -61,7 +61,7 @@
 #include "biosdefs.h"
 #include "kprint.h"
 #include "asm.h"
-#include "sched_abi.h"
+#include "gemdisp.h"
 
 extern LONG init_p0_stkptr(void); /* called only from gemstart.S */
 extern void run_accs_and_desktop(void); /* called only from gemstart.S */
@@ -129,7 +129,7 @@ GLOBAL MFORM    gl_mouse;
 GLOBAL MFORM    gl_prevmouse;           /* previous AES  mouse form */
 #endif
 
-GLOBAL AESPD    *rlr, *drl, *nrl;
+GLOBAL AESPD    *rlr;
 GLOBAL EVB      *eul, *dlr, *zlr;
 
 GLOBAL UBYTE    indisp;
@@ -591,7 +591,7 @@ void all_run(void)
     /* let all the acc's run*/
     for (i = 0; i < num_accs; i++)
     {
-        k_yield();
+        dsptch();
     }
     /* then get in the wait line */
     wm_update(BEG_UPDATE);
@@ -775,7 +775,7 @@ void run_accs_and_desktop(void)
     build_root_path(D.s_cdir, 'A'+dos_gdrv());  /* root of current drive */
     isgem = process_inf2(&isauto);  /* process emudesk.inf part 2 */
 
-    k_yield();                      /* off we go !!! */
+    dsptch();                      /* off we go !!! */
     wait_for_accs(AP_MESAG);        /* wait until DAs have initialised */
 
     sh_main(isauto, isgem);         /* main shell loop */
@@ -884,7 +884,6 @@ void gem_main(void)
      */
 
     /* initialize list and unused lists   */
-    nrl = drl = NULL;
     dlr = zlr = NULL;
     fph = fpt = fpcnt = 0;
 
@@ -906,7 +905,9 @@ void gem_main(void)
         rlr->p_qindex = 0;
         memset(rlr->p_name, ' ', AP_NAMELEN);
         rlr->p_appdir[0] = '\0'; /* by default, no application directory */
-        /* if not rlr then initialize his stack pointer */
+        /* Where the AES trap puts the stack of every process but the
+         * first (aestrap in gemdosif.S): the top of its private stack,
+         * which is also where its kernel task starts. */
         if (i != 0)
         {
             /* One word past u_supstk, matching init_p0_stkptr()'s stack_top
@@ -933,7 +934,7 @@ void gem_main(void)
     }
     curpid = 0;
     rlr->p_pid = curpid++;
-    rlr->p_link = NULL;
+    aes_sched_init(rlr);            /* this is process 0 */
 
     /* end of process init */
 
@@ -951,6 +952,7 @@ void gem_main(void)
      * (for shutdown or resolution change)
      */
     aes_run_rom_program(accdesk_start);
+    aes_sched_exit();               /* the other processes end too */
 
     /* restore previous trap#2 address */
     disable_interrupts();

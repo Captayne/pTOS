@@ -39,6 +39,7 @@
 #include "gemqueue.h"
 #include "gempd.h"
 #include "extmsg.h"
+#include "sched_abi.h"
 
 #include "asm.h"
 
@@ -72,28 +73,6 @@ WORD forkq(FCODE fcode, LONG fdata)
 
     KDEBUG(("forkq() failed: fcode=%p, fdata=0x%08lx\n",fcode,fdata));
     return -1;      /* forkq() failed */
-}
-
-
-static void disp_act(AESPD *p)
-{
-    /* process is ready, so put him on RLR */
-    p->p_stat &= ~WAITIN;
-    insert_process(p, &rlr);
-}
-
-
-static void mwait_act(AESPD *p)
-{
-    /* sleep on nrl if event flags are not set */
-    if (p->p_evwait & p->p_evflg)
-        disp_act(p);
-    else
-    {
-        /* good night, Mrs. Calabash, wherever you are */
-        p->p_link = nrl;
-        nrl = p;
-    }
 }
 
 
@@ -203,78 +182,104 @@ static void take_extmsg(void)
 }
 
 
-static void schedule(void)
-{
-    AESPD *p;
+/*
+ * Everything that has piled up for the processes: the keyboard, messages
+ * from devices, and the fork ring -- input, timers, whatever interrupts
+ * queued.  Waking the processes it is for happens on the way, in
+ * signal() (gemasync.c) through aes_wake().
+ *
+ * Not again from inside: a fork function may end up in dsptch().
+ */
+static BOOL woken;
 
-    /* run through lists until someone is on the rlr
-     * or the fork list
-     */
-    for (;;)
-    {
-        /* poll the keyboard    */
-        chkkbd();
-        /* and anything a device left for an application */
-        take_extmsg();
-        /* now move drl processes to rlr */
-        while (drl)
-        {
-            drl = (p = drl) -> p_link;
-            disp_act(p);
-        }
-        /* check if there is something to run */
-        if (rlr || fpcnt)
-            break;
-#if USE_STOP_INSN_TO_FREE_HOST_CPU
-        stop_until_interrupt();
-#endif
-    }
+static void pump(void)
+{
+    if (indisp)
+        return;
+    indisp = TRUE;
+    chkkbd();
+    take_extmsg();
+    while (fpcnt)
+        forker();
+    indisp = FALSE;
 }
 
-
-/************************************************************************/
-/*                                                                      */
-/*   This dispatcher is called from dsptch().                           */
-/*   Its job is to determine the next task to be run.                   */
-/*   This function must end by calling switchto() and will never return.*/
-/*   rlr -> p_stat determines the action to perform on the process that */
-/*              was in context                                          */
-/*   rlr -> p_uda -> dparam is used by the action routines              */
-/*                                                                      */
-/************************************************************************/
-
-void disp(void); /* called only from aes/gemasm.S */
-
-void disp(void)
+/* p has what it waited for: let the kernel run it again */
+void aes_wake(AESPD *p)
 {
-    AESPD *p;
+    p->p_stat &= ~WAITIN;
+    k_wake(p->p_task);
+    woken = TRUE;
+}
 
-    /* take the process p off the ready list root */
-    p = rlr;
-    rlr = p->p_link;
-    KDEBUG(("disp() to \"%8.8s\"\n", rlr->p_name));
+/*
+ * dsptch(): give the processor away.
+ *
+ * A process that has set WAITIN sleeps until aes_wake(), unless what it
+ * waits for has already happened; any other stays runnable.  Which
+ * process runs next is the kernel's decision, not ours.
+ */
+void dsptch(void)
+{
+    AESPD *p = rlr;
 
-    /* based on the state of the process p, do something */
-    if (p->p_stat & WAITIN)
-        mwait_act(p);
+    if (indisp)         /* from a fork function: carry on */
+        return;
+
+    pump();
+
+    if ((p->p_stat & WAITIN) && !(p->p_evwait & p->p_evflg))
+        k_block();
     else
-        disp_act(p);
-
-    /* run through and execute all the fork processes */
-    do
     {
-        if (fpcnt)
-        {
-            forker();
-        }
-        schedule();
-    } while (fpcnt);
+        p->p_stat &= ~WAITIN;
+        k_yield();
+    }
 
-    /* switchto() is a machine dependent routine which:
-     *      1) restores machine state
-     *      2) clear "indisp" semaphore
-     *      3) returns to appropriate address
-     * so we'll never return from this
-     */
-    switchto(rlr->p_uda);
+    rlr = p;            /* back: whoever ran meanwhile set it to itself */
+}
+
+/*
+ * The kernel calls this on core 0 when no process can run.  None is
+ * running either, so rlr points at none while the input is handed out --
+ * signal() must not take the process that went to sleep for the running
+ * one.  Sleep until the next interrupt unless someone was woken.
+ */
+static void aes_idle(void)
+{
+    AESPD *p = rlr;
+
+    woken = FALSE;
+    rlr = NULL;
+    pump();
+    rlr = p;
+
+#if USE_STOP_INSN_TO_FREE_HOST_CPU
+    if (!woken && !fpcnt)
+        stop_until_interrupt();
+#endif
+}
+
+/* process 0 is the kernel task that runs the AES start-up */
+void aes_sched_init(AESPD *p0)
+{
+    p0->p_task = k_current();
+    k_set_idle(aes_idle);
+}
+
+/* the AES ends (shutdown, resolution change): its other processes too */
+void aes_sched_exit(void)
+{
+    WORD i;
+
+    for (i = 1; i < totpds; i++)
+    {
+        AESPD *p = pd_index(i);
+
+        if (p->p_task)
+        {
+            k_task_kill(p->p_task);
+            p->p_task = 0;
+        }
+    }
 }

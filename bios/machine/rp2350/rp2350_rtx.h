@@ -10,6 +10,11 @@
 #ifndef RP2350_RTX_H
 #define RP2350_RTX_H
 
+struct kernel_api;
+
+/* the kernel pTOS runs on, once rp2350_rtx_init() has found it */
+extern const struct kernel_api *rp2350_kernel;
+
 void rp2350_rtx_init(void);
 const char *rp2350_rtx_name(void);
 

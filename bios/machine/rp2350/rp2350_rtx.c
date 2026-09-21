@@ -38,6 +38,8 @@
 #define image   ((const struct rtx_image *)RTX_IMAGE_ADDR)
 #define mailbox ((struct rtx_mailbox *)RTX_MAILBOX_ADDR)
 
+const struct kernel_api *rp2350_kernel;
+
 static BOOL runtime_up;
 static const char *runtime_state;     /* NULL: not started (no .data: it is read-only) */
 
@@ -398,6 +400,7 @@ void rp2350_rtx_init(void)
         runtime_state = "kernel did not start on core 0";
         return;
     }
+    rp2350_kernel = image->api;
     if (image->api->start_core1() != 0)
     {
         KINFO(("rtx: kernel did not start core 1\n"));

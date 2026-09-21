@@ -88,7 +88,6 @@ static ULONG stack_free(const ULONG *bottom, ULONG size)
 
 extern ULONG irq_stack_bottom[];
 #if CONF_WITH_AES
-extern ULONG gemasm_stack_bottom[];
 LONG aes_stack_free(int i);
 #endif
 
@@ -97,8 +96,6 @@ static void mon_stacks(void)
     mon_puts("[stack free] irq=");
     mon_puthex(stack_free(irq_stack_bottom, 4096));
 #if CONF_WITH_AES
-    mon_puts(" disp=");
-    mon_puthex(stack_free(gemasm_stack_bottom, 0x800));
     mon_puts(" aes0=");
     mon_puthex(aes_stack_free(0));
     mon_puts(" aes1=");

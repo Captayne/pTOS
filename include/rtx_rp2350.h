@@ -59,6 +59,28 @@ struct kernel_api {
     /* Start the kernel on core 0, with the caller -- pTOS -- as its main
        task.  Called once, before start_core1().  0 on success. */
     long (*start_core0)(void);
+
+    /*
+     * Scheduling on core 0: every AES process is a task.  A task is a
+     * number, 0 is none.  All of these are called in thread mode, on
+     * core 0, except set_prio(), which an interrupt may call too.
+     */
+
+    /* A new task on the caller's core, runnable at once, on a stack the
+       caller provides.  0 when the table is full. */
+    unsigned long (*task_create)(void (*entry)(void), void *stack,
+                                 unsigned long size, unsigned short prio);
+    long (*task_kill)(unsigned long task);
+
+    void (*yield)(void);                    /* stay runnable */
+    void (*block)(void);                    /* until wake()  */
+    void (*wake)(unsigned long task);
+    unsigned long (*self)(void);
+    long (*set_prio)(unsigned long task, unsigned short prio);
+
+    /* Called on core 0 whenever no task there can run; it may wake
+       tasks, and should sleep until the next interrupt if it did not. */
+    void (*set_idle)(void (*fn)(void));
 };
 
 /* mailbox commands (pTOS -> runtime) */
