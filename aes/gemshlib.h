@@ -17,6 +17,7 @@ extern WORD     gl_nextrez;
 
 void sh_read(char *pcmd, char *ptail);
 WORD sh_write(WORD doex, WORD isgem, WORD isover, const char *pcmd, const char *ptail);
+BOOL sh_pending(void);
 void sh_get(void *pbuffer, WORD len);
 void sh_put(const void *pdata, WORD len);
 void sh_tographic(void);

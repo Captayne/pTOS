@@ -205,6 +205,21 @@ WORD sh_write(WORD doex, WORD isgem, WORD isover, const char *pcmd, const char *
  *  Used by the DESKTOP to recall up to SIZE_SHELBUF bytes worth of previously
  *  'put' desktop-context information.
  */
+/*
+ *  Is another program waiting to be run?
+ *
+ *  shel_write() only writes down what should run next; whatever runs now
+ *  has to end before it can.  A program that asked for it knows that and
+ *  ends itself.  Somebody else's request -- an accessory receiving a
+ *  program over the wire, say -- would otherwise wait for ever, because
+ *  the desktop has no reason to end.  So the desktop asks, and makes way.
+ */
+BOOL sh_pending(void)
+{
+    return sh.sh_nextapp != DESKTOP_APP;
+}
+
+
 void sh_get(void *pbuffer, WORD len)
 {
     memcpy(pbuffer, D.g_shelbuf, len);

@@ -65,6 +65,7 @@ extern const LONG cicontest_rsc_size;
 #include "deskobj.h"
 #include "deskrez.h"
 #include "deskmain.h"
+#include "../aes/gemshlib.h"   /* sh_pending() */
 #include "desktouch.h"
 #include "deskusb.h"
 #include "scancode.h"
@@ -2190,6 +2191,13 @@ BOOL deskmain(void)
                                 G.g_rmsg, 0, 0,
                                 &mx, &my, &button, &kstate, &kret, &bret);
         }
+
+        /*
+         * somebody else -- an accessory -- asked for a program to be
+         * run.  It cannot start while we are here, so make way.
+         */
+        if (sh_pending())
+            done = TRUE;
 
         /* free the screen      */
         wind_update(END_UPDATE);
