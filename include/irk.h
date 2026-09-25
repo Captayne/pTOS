@@ -87,6 +87,12 @@
 #ifndef IRK_H
 #define IRK_H
 
+/* A sketch's .ino is compiled as C++, and C++ decorates the names of
+   functions: without this it would look for them in vain. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define IRK_COOKIE      0x5F49524BL     /* '_IRK' */
 #define IRK_API_VERSION 1
 
@@ -323,5 +329,10 @@ struct irk_api {
      */
     struct irk_api *(*rt_api)(void);
 };
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* IRK_H */

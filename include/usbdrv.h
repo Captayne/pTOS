@@ -45,6 +45,12 @@
 #ifndef USBDRV_H
 #define USBDRV_H
 
+/* A sketch's .ino is compiled as C++, and C++ decorates the names of
+   functions: without this it would look for them in vain. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UDR_COOKIE      0x5F554452L     /* '_UDR' */
 #define UDR_API_VERSION 1
 
@@ -72,5 +78,10 @@ struct udr_api {
      */
     long (*sectors)(void);
 };
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USBDRV_H */

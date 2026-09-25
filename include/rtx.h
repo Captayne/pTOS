@@ -42,6 +42,12 @@
 #ifndef RTX_H
 #define RTX_H
 
+/* A sketch's .ino is compiled as C++, and C++ decorates the names of
+   functions: without this it would look for them in vain. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define RTX_COOKIE      0x5f525458L     /* '_RTX' */
 #define RTX_API_VERSION 1
 
@@ -131,5 +137,10 @@ static __inline__ unsigned long rtx_ring_count(const struct rtx_ring *r)
 {
     return r->head - r->tail;
 }
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* RTX_H */

@@ -30,6 +30,12 @@
 #ifndef USBCON_H
 #define USBCON_H
 
+/* A sketch's .ino is compiled as C++, and C++ decorates the names of
+   functions: without this it would look for them in vain. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UCN_COOKIE      0x5f55434eL     /* '_UCN' */
 #define UCN_VERSION     1
 
@@ -51,5 +57,10 @@ struct ucn_api
     /* all of it, waiting for room on the port */
     long (*write)(const void *buf, long len);
 };
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* USBCON_H */
