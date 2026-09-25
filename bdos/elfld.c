@@ -127,11 +127,17 @@
 #if ARCH_ARM
 #define ELF_EM_EXPECTED 40      /* EM_ARM */
 #define ELF_R_DIR32     2       /* R_ARM_ABS32 */
+/* R_ARM_TARGET1: the ARM ABI leaves it to the platform whether this means
+ * ABS32 or REL32, and for bare metal -- which is what we are -- it is
+ * ABS32.  The compiler uses it for the table of global constructors, so
+ * without this a C++ program jumps into nowhere before main(). */
+#define ELF_R_DIR32_ALT 38      /* R_ARM_TARGET1 */
 #define ELF_R_RELATIVE  23      /* R_ARM_RELATIVE */
 #define ELF_SLOT_ALIGN  4
 #else
 #define ELF_EM_EXPECTED 4       /* EM_68K */
 #define ELF_R_DIR32     1       /* R_68K_32 */
+#define ELF_R_DIR32_ALT 1       /* no second name for it here */
 #define ELF_R_RELATIVE  22      /* R_68K_RELATIVE */
 #define ELF_SLOT_ALIGN  2
 #endif
@@ -467,7 +473,8 @@ static LONG elf_fixup(UBYTE *load_base, const ELFINFO *info, LONG bias,
 {
     ULONG *slot;
 
-    if (type != ELF_R_DIR32 && type != ELF_R_RELATIVE)
+    if (type != ELF_R_DIR32 && type != ELF_R_DIR32_ALT
+        && type != ELF_R_RELATIVE)
         return 0;   /* PC-relative and other slots need no load-time fixup */
 
     /*
