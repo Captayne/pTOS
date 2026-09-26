@@ -15,6 +15,7 @@
 #include "emutos.h"
 #include "cookie.h"
 #include "machine.h"
+#include "wifisettings.h"
 #include "disk.h"
 #include "has.h"
 #include "processor.h"
@@ -809,6 +810,11 @@ void fill_cookie_jar(void)
 #if CONF_WITH_RP2350_RTX
     /* starts core 1 and adds the _RTX cookie */
     rp2350_rtx_init();
+#endif
+
+#if CONF_WITH_WIFI_SETTINGS
+    /* the wireless network the desktop was told about (_WIF) */
+    wifi_add_cookie();
 #endif
 
 #ifdef MACHINE_RP2350

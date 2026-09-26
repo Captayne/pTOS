@@ -44,6 +44,9 @@
 #include "deskmain.h"
 #include "deskdir.h"
 #include "deskins.h"
+#if CONF_WITH_WIFI_SETTINGS
+#include "../bios/wifisettings.h"
+#endif
 #include "desksupp.h"
 #include "icons.h"
 #include "xbiosbind.h"
@@ -967,6 +970,17 @@ void app_start(void)
          * CONF_WITH_DESKTOP_CONFIG is enabled.  However, we allow all
          * versions of the ROM to _load_ menu item shortcuts.
          */
+#if CONF_WITH_WIFI_SETTINGS
+        case 'S':                       /* wireless network: S ssid@key@ */
+            {
+                char *ssid, *key;
+
+                pcurr = scan_str(pcurr+1, &ssid);
+                pcurr = scan_str(pcurr, &key);
+                wifi_set(ssid, key);
+            }
+            break;
+#endif
         case 'K':                       /* menu item shortcuts */
             pcurr++;
             for (i = 0; i < NUM_SHORTCUTS; i++)
@@ -1175,6 +1189,13 @@ void app_save(WORD todisk)
 #endif
     pcurr += sprintf(pcurr,"#E %02X %02X %02X %02X %02X\r\n",
                     env1,env2,HIBYTE(mode),LOBYTE(mode),env5);
+
+#if CONF_WITH_WIFI_SETTINGS
+    /* the wireless network and its key, as they were typed */
+    if (wifi_configured())
+        pcurr += sprintf(pcurr,"#S %s@%s@\r\n",
+                        wifi_get_ssid(), wifi_get_key());
+#endif
 
 #if CONF_WITH_BACKGROUNDS
     /* save desktop/window colour/patterns */

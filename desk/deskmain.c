@@ -68,6 +68,7 @@ extern const LONG cicontest_rsc_size;
 #include "../aes/gemshlib.h"   /* sh_pending() */
 #include "desktouch.h"
 #include "deskusb.h"
+#include "deskwifi.h"
 #include "scancode.h"
 
 /* structure pointed to by return value from Keytbl() */
@@ -926,6 +927,11 @@ static WORD do_optnmenu(WORD item)
 #if CONF_WITH_USB_DRIVE_MENU
     case USBDITEM:
         usbdrive_toggle();
+        break;
+#endif
+#if CONF_WITH_WIFI_SETTINGS
+    case WIFIITEM:
+        wifi_settings();
         break;
 #endif
     case RESITEM:
