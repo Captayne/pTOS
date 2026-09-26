@@ -91,11 +91,11 @@ guiconfig:
 
 .PHONY: oldconfig
 oldconfig:
-	$(PYTHON) -m oldconfig --kconfig $(KCONFIG_TOP)
+	$(PYTHON) -m oldconfig $(KCONFIG_TOP)
 
 .PHONY: olddefconfig
 olddefconfig:
-	$(PYTHON) -m olddefconfig --kconfig $(KCONFIG_TOP)
+	$(PYTHON) -m olddefconfig $(KCONFIG_TOP)
 
 .PHONY: savedefconfig
 savedefconfig:
