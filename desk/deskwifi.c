@@ -13,8 +13,12 @@
  * to EMUDESK.INF by "Save desktop".
  *
  * The dialog is built here rather than taken from the resource, the same
- * way the touch calibration builds its crosses: two editable fields, two
- * buttons, and nothing that needs a resource editor.
+ * way the touch calibration builds its crosses: three editable fields,
+ * two buttons, and nothing that needs a resource editor.
+ *
+ * The third field is the hours from UTC.  The machine keeps no rule for
+ * when summer time starts -- that is politics, not arithmetic, and it
+ * changes -- so whoever sets it says 1 or 2 and is right.
  */
 
 #include "emutos.h"
@@ -32,6 +36,7 @@
 /* what the fields hold while the dialog is open */
 static char ssid_text[WIF_SSID_LEN + 1];
 static char key_text[WIF_KEY_LEN + 1];
+static char utc_text[8];
 
 /* the template and the validation string of an editable field: one
  * character each per position.  "X" accepts anything printable, which is
@@ -40,17 +45,19 @@ static char ssid_tmplt[WIF_SSID_LEN + 1];
 static char ssid_valid[WIF_SSID_LEN + 1];
 static char key_tmplt[WIF_KEY_LEN + 1];
 static char key_valid[WIF_KEY_LEN + 1];
+static char utc_tmplt[8];
+static char utc_valid[8];
 
-static TEDINFO ted[2];
+static TEDINFO ted[3];
 
-enum { O_ROOT, O_TITLE, O_NAMELBL, O_NAME, O_KEYLBL, O_KEY, O_OK, O_CANCEL,
-       O_NUM };
+enum { O_ROOT, O_TITLE, O_NAMELBL, O_NAME, O_KEYLBL, O_KEY,
+       O_UTCLBL, O_UTC, O_UTCHINT, O_OK, O_CANCEL, O_NUM };
 static OBJECT tree[O_NUM];
 
 #define CW          8                   /* a character, in pixels */
 #define CH         16
 #define DLG_W      (38 * CW)
-#define DLG_H      (9 * CH)
+#define DLG_H      (11 * CH)
 
 static void set_obj(WORD i, WORD next, WORD head, WORD tail, UWORD type,
                     LONG spec, WORD x, WORD y, WORD w, WORD h)
@@ -109,8 +116,8 @@ static void build_tree(void)
 {
     set_obj(O_ROOT, -1, O_TITLE, O_CANCEL, G_BOX, 0x00021100L,
             0, 0, DLG_W, DLG_H);
-    set_obj(O_TITLE, O_NAMELBL, -1, -1, G_STRING, (LONG)"Wireless network",
-            CW, CH / 2, 16 * CW, CH);
+    set_obj(O_TITLE, O_NAMELBL, -1, -1, G_STRING, (LONG)"Connecty",
+            CW, CH / 2, 8 * CW, CH);
 
     set_obj(O_NAMELBL, O_NAME, -1, -1, G_STRING, (LONG)"Name:",
             CW, 2 * CH, 5 * CW, CH);
@@ -122,14 +129,23 @@ static void build_tree(void)
 
     set_obj(O_KEYLBL, O_KEY, -1, -1, G_STRING, (LONG)"Key:",
             CW, 4 * CH, 4 * CW, CH);
-    set_obj(O_KEY, O_OK, -1, -1, G_FTEXT, 0L, 0, 0, 0, 0);
+    set_obj(O_KEY, O_UTCLBL, -1, -1, G_FTEXT, 0L, 0, 0, 0, 0);
     set_field(O_KEY, &ted[1], key_text, key_tmplt, key_valid,
               28, 7 * CW, 4 * CH);
 
+    set_obj(O_UTCLBL, O_UTC, -1, -1, G_STRING, (LONG)"UTC:",
+            CW, 6 * CH, 4 * CW, CH);
+    set_obj(O_UTC, O_UTCHINT, -1, -1, G_FTEXT, 0L, 0, 0, 0, 0);
+    set_field(O_UTC, &ted[2], utc_text, utc_tmplt, utc_valid,
+              3, 7 * CW, 6 * CH);
+    set_obj(O_UTCHINT, O_OK, -1, -1, G_STRING,
+            (LONG)"hours (1 winter, 2 summer)",
+            12 * CW, 6 * CH, 26 * CW, CH);
+
     set_obj(O_OK, O_CANCEL, -1, -1, G_BUTTON, (LONG)"OK",
-            CW * 6, 6 * CH + CH / 2, 8 * CW, CH);
+            CW * 6, 8 * CH + CH / 2, 8 * CW, CH);
     set_obj(O_CANCEL, O_ROOT, -1, -1, G_BUTTON, (LONG)"Cancel",
-            CW * 20, 6 * CH + CH / 2, 8 * CW, CH);
+            CW * 20, 8 * CH + CH / 2, 8 * CW, CH);
     tree[O_OK].ob_flags = SELECTABLE | DEFAULT | EXIT;
     tree[O_CANCEL].ob_flags = SELECTABLE | EXIT | LASTOB;
 }
@@ -145,6 +161,20 @@ void wifi_settings(void)
 
     strlcpy(ssid_text, wifi_get_ssid(), sizeof(ssid_text));
     strlcpy(key_text, wifi_get_key(), sizeof(key_text));
+    {
+        short h = wifi_get_utc_offset();
+        short i = 0;
+
+        if (h < 0)
+        {
+            utc_text[i++] = '-';
+            h = (short)-h;
+        }
+        if (h >= 10)
+            utc_text[i++] = (char)('0' + h / 10);
+        utc_text[i++] = (char)('0' + h % 10);
+        utc_text[i] = '\0';
+    }
 
     build_tree();
 
@@ -161,7 +191,10 @@ void wifi_settings(void)
     tree[O_CANCEL].ob_state &= ~SELECTED;
 
     if (which == O_OK)
+    {
         wifi_set(ssid_text, key_text);
+        wifi_set_utc_offset_str(utc_text);
+    }
 }
 
 #endif /* CONF_WITH_WIFI_SETTINGS */

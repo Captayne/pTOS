@@ -973,11 +973,13 @@ void app_start(void)
 #if CONF_WITH_WIFI_SETTINGS
         case 'S':                       /* wireless network: S ssid@key@ */
             {
-                char *ssid, *key;
+                char *ssid, *key, *tz;
 
                 pcurr = scan_str(pcurr+1, &ssid);
                 pcurr = scan_str(pcurr, &key);
+                pcurr = scan_str(pcurr, &tz);
                 wifi_set(ssid, key);
+                wifi_set_utc_offset_str(tz);
             }
             break;
 #endif
@@ -1193,8 +1195,9 @@ void app_save(WORD todisk)
 #if CONF_WITH_WIFI_SETTINGS
     /* the wireless network and its key, as they were typed */
     if (wifi_configured())
-        pcurr += sprintf(pcurr,"#S %s@%s@\r\n",
-                        wifi_get_ssid(), wifi_get_key());
+        pcurr += sprintf(pcurr,"#S %s@%s@%d@\r\n",
+                        wifi_get_ssid(), wifi_get_key(),
+                        wifi_get_utc_offset());
 #endif
 
 #if CONF_WITH_BACKGROUNDS

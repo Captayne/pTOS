@@ -29,6 +29,7 @@
 
 static char wifi_ssid_buf[WIF_SSID_LEN + 1];
 static char wifi_key_buf[WIF_KEY_LEN + 1];
+static short wifi_utc_offset = 1;       /* Central European Time */
 
 const char *wifi_get_ssid(void)
 {
@@ -51,6 +52,41 @@ void wifi_set(const char *ssid, const char *key)
     strlcpy(wifi_key_buf, key ? key : "", sizeof(wifi_key_buf));
 }
 
+short wifi_get_utc_offset(void)
+{
+    return wifi_utc_offset;
+}
+
+void wifi_set_utc_offset(short hours)
+{
+    if (hours >= -12 && hours <= 14)    /* the world's real range */
+        wifi_utc_offset = hours;
+}
+
+/* "1", "+2", "-5": what the dialog and EMUDESK.INF carry */
+void wifi_set_utc_offset_str(const char *s)
+{
+    short sign = 1, value = 0;
+
+    if (!s || !*s)
+        return;                         /* nothing said: keep what we have */
+    while (*s == ' ')
+        s++;
+    if (!*s)
+        return;
+    if (*s == '-')
+    {
+        sign = -1;
+        s++;
+    }
+    else if (*s == '+')
+        s++;
+    while (*s >= '0' && *s <= '9')
+        value = (short)(value * 10 + (*s++ - '0'));
+
+    wifi_set_utc_offset((short)(sign * value));
+}
+
 /* ---- what a program sees ---- */
 
 static short wif_set(const char *ssid, const char *key)
@@ -63,12 +99,20 @@ static short wif_set(const char *ssid, const char *key)
     return 0;
 }
 
+static short wif_set_utc(short hours)
+{
+    wifi_set_utc_offset(hours);
+    return 0;
+}
+
 static const struct wif_api wif_api = {
     WIF_VERSION,
     sizeof(struct wif_api),
     wifi_get_ssid,
     wifi_get_key,
-    wif_set
+    wif_set,
+    wifi_get_utc_offset,
+    wif_set_utc
 };
 
 void wifi_add_cookie(void)

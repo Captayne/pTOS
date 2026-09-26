@@ -42,7 +42,7 @@
 #define WIFI_H
 
 #define WIF_COOKIE      0x5F574946L     /* '_WIF' */
-#define WIF_VERSION     1
+#define WIF_VERSION     2
 
 #define WIF_SSID_LEN    32              /* as 802.11 has it */
 #define WIF_KEY_LEN     63              /* WPA2 passphrase */
@@ -67,6 +67,15 @@ struct wif_api {
      * EMUDESK.INF.  0 on success.
      */
     short (*set)(const char *ssid, const char *key);
+
+    /*
+     * Whole hours from UTC, as entered under Connecty: 1 for Central
+     * European Time, 2 while summer time is in force.  The machine keeps
+     * no rule for when that is -- it has no calendar of politics -- so
+     * whoever set it decides.  (Version 2 and later.)
+     */
+    short (*utc_offset)(void);
+    short (*set_utc_offset)(short hours);
 };
 
 #ifdef __cplusplus

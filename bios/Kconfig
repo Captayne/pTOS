@@ -448,6 +448,18 @@ config CONF_WITH_RP2350_UART
 	  Use UART0 of the RP2350 (GPIO0 TX, GPIO1 RX, 115200 8N1) as the
 	  serial console.
 
+config CONF_WITH_RP2350_UART1
+	bool "RP2350 UART1 for programs (_UA1)"
+	depends on MACHINE_RP2350
+	default y
+	help
+	  The second serial port (GPIO4 TX, GPIO5 RX), driven by its
+	  interrupt into buffers of the system's own, and offered to programs
+	  through the "_UA1" cookie (include/uart1.h).  A program that reads
+	  the registers itself loses characters whenever it gives the
+	  processor away; this one does not.  It is where a radio module or a
+	  sensor board goes.
+
 config CONF_WITH_RP2350_RTX
 	bool "RP2350 real-time extension (core 1)"
 	depends on MACHINE_RP2350
