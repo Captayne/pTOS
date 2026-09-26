@@ -64,7 +64,7 @@
 #define TAG_OBSOLETE    0xfffc          /* bit 1 as well */
 
 #define NO_SLOT         0xffff
-#define GC_RESERVE      3               /* free blocks kept in hand */
+#define GC_RESERVE      8               /* free blocks kept in hand */
 #define STATIC_WL_EVERY 64              /* GCs between wear levelling moves */
 
 struct tag
@@ -203,7 +203,8 @@ static WORD pick_free_block(void)
     return best;
 }
 
-static void copy_out(WORD block);   /* forward, used by garbage collection */
+static BOOL copy_out(WORD block);       /* both used by garbage collection */
+static BOOL compact_in_place(WORD block);
 
 /*
  * Free a block: the one with the fewest valid sectors, so that as little
@@ -223,6 +224,11 @@ static void collect(void)
         return;
     collecting = TRUE;
 
+    /* Nothing is more urgent than getting a block back when there is
+     * none: wear can wait for the next time. */
+    if (count_free() == 0)
+        wear_move = FALSE;
+
     for (i = 0; i < FD_BLOCKS; i++)
     {
         if (used[i] == 0 || i == open_block)
@@ -241,19 +247,96 @@ static void collect(void)
             victim = i;
         }
     }
+
     if (victim >= 0)
     {
-        copy_out(victim);
-        erase_block(victim);
+        if (count_free() > 0)
+        {
+            /* Erase only what has been copied: a sector that found no
+             * room is still only in this block. */
+            if (copy_out(victim))
+                erase_block(victim);
+        }
+        else
+            compact_in_place(victim);
     }
     collecting = FALSE;
 }
 
 static LONG write_sector(ULONG lsn, const UBYTE *buf);
 
-/* move every valid sector of a block elsewhere */
-static void copy_out(WORD block)
+/*
+ * The way out when there is no free block left at all.
+ *
+ * Then there is nowhere to copy a victim's contents to, and garbage
+ * collection cannot start -- which is how a drive wedges solid and
+ * reports itself write protected while most of it is obsolete.  It
+ * happens because a block with seven obsolete slots is not free, it has
+ * to be erased first, and because GEMDOS never tells us that a file was
+ * deleted: every sector ever written stays valid as far as this layer
+ * knows, thinly spread, until no single block is obsolete throughout.
+ *
+ * So take what is still valid into SRAM, erase the block, and put it
+ * back where it came from.  The block then holds only what is still
+ * valid and the rest of it is free again -- no other block needed.
+ *
+ * This is the one place where a power failure costs data: between the
+ * erase and the last sector going back, those sectors are only in RAM.
+ * That is why it is the last resort and not the ordinary path, and why
+ * GC_RESERVE blocks are kept in hand so it is not normally reached.
+ */
+static BOOL compact_in_place(WORD block)
 {
+    static UBYTE hold[SLOTS][SECTOR_SIZE];
+    UWORD lsn[SLOTS];
+    const struct header *h = hdr(block);
+    WORD n = 0;
+    WORD i;
+
+    for (i = 0; i < SLOTS; i++)
+    {
+        UWORD slot = block * SLOTS + i;
+
+        if (h->tag[i].flags != TAG_VALID || h->tag[i].lsn >= FD_SECTORS)
+            continue;
+        if (map[h->tag[i].lsn] != slot)  /* already superseded */
+            continue;
+        memcpy(hold[n], slot_data(slot), SECTOR_SIZE);
+        lsn[n] = h->tag[i].lsn;
+        n++;
+    }
+    if (n >= SLOTS)
+        return FALSE;               /* all of it is valid: nothing to gain */
+
+    /* For the moment they live in RAM only, and write_sector() must not
+     * go looking for a previous copy in the block we are erasing. */
+    for (i = 0; i < n; i++)
+        map[lsn[i]] = NO_SLOT;
+
+    erase_block(block);
+    open_block = block;
+
+    for (i = 0; i < n; i++)
+        if (write_sector(lsn[i], hold[i]) != E_OK)
+            return FALSE;           /* cannot happen: the block is empty */
+
+    return TRUE;
+}
+
+/*
+ * Move every valid sector of a block elsewhere.  Returns FALSE when one of
+ * them found no room, and then the block must not be erased.
+ *
+ * The sector goes through SRAM on the way.  It has to: programming the
+ * flash means leaving XIP behind, and the bootrom would be reading its
+ * source out of a window that is switched off -- which does not return
+ * garbage, it stalls the bus and the machine with it.  Only garbage
+ * collection ever copies flash to flash, which is why this waited until
+ * the drive was full enough to collect.
+ */
+static BOOL copy_out(WORD block)
+{
+    static UBYTE sector[SECTOR_SIZE];
     const struct header *h = hdr(block);
     WORD i;
 
@@ -265,13 +348,16 @@ static void copy_out(WORD block)
             continue;
         if (map[h->tag[i].lsn] != slot)  /* already superseded */
             continue;
-        write_sector(h->tag[i].lsn, slot_data(slot));
+        memcpy(sector, slot_data(slot), SECTOR_SIZE);
+        if (write_sector(h->tag[i].lsn, sector) != E_OK)
+            return FALSE;
     }
+    return TRUE;
 }
 
 static LONG write_sector(ULONG lsn, const UBYTE *buf)
 {
-    UWORD old = map[lsn];
+    UWORD old;
     WORD block, i;
     UWORD slot;
 
@@ -279,13 +365,17 @@ static LONG write_sector(ULONG lsn, const UBYTE *buf)
     {
         if (count_free() <= GC_RESERVE)
             collect();
-        block = pick_free_block();
-        if (block < 0)
-            return EWRPRO;              /* full beyond repair */
-        if (hdr(block)->magic != FD_MAGIC)
-            write_magic(block, 1);
-        open_block = block;
+        if (open_block < 0 || used[open_block] >= SLOTS)
+        {
+            block = pick_free_block();
+            if (block < 0)
+                return EWRPRO;          /* full beyond repair */
+            if (hdr(block)->magic != FD_MAGIC)
+                write_magic(block, 1);
+            open_block = block;
+        }
     }
+    old = map[lsn];     /* after collecting: the old copy may have moved */
     block = open_block;
     i = used[block];
     slot = block * SLOTS + i;
