@@ -87,6 +87,7 @@
 #define RP2350_USBCTRL_IRQ      14
 #define RP2350_IO_IRQ_BANK0     21
 #define RP2350_UART0_IRQ        33
+#define RP2350_UART1_IRQ        34
 
 /* RESETS: reset bits */
 #define RP2350_RESET_IO_BANK0   (1UL << 6)

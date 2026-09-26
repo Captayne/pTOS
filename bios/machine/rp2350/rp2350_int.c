@@ -26,6 +26,7 @@
 #include "rp2350_int.h"
 #include "rp2350_uart.h"
 #include "rp2350_usbcon.h"
+#include "tosvars.h"
 #if CONF_WITH_RP2350_LCD
 #include "rp2350_lcd.h"
 #endif
@@ -51,9 +52,39 @@
 
 static PFVOID irq_handlers[RP2350_NUM_IRQS];
 
+/*
+ * The vector table, in SRAM.
+ *
+ * It starts out in flash, where the bootrom finds it, and that is fine
+ * until the flash is being written: then nothing can be read from it --
+ * neither the code of a handler nor the table that points at one.  So the
+ * table is copied here and VTOR is pointed at the copy, which is what
+ * makes it possible to leave one interrupt running while a sector is
+ * erased.  See rp2350_int_only() below, and .ramtext in rp2350_flash.c
+ * and rp2350_uart1.c.
+ *
+ * VTOR wants the table aligned to the next power of two above its size:
+ * 16 + 52 entries -> 512 bytes.
+ */
+static ULONG ram_vectors[16 + RP2350_NUM_IRQS] __attribute__((aligned(512)));
+
+/* what was enabled before rp2350_int_only() took the rest away */
+#define IRQ_WORDS   ((RP2350_NUM_IRQS + 31) / 32)
+static ULONG irq_enabled_before[IRQ_WORDS];
+
 void rp2350_int_init(void)
 {
     int i;
+
+    /* the table into SRAM, and VTOR onto the copy */
+    {
+        const ULONG *from = (const ULONG *)RP2350_REG(ARMV8M_SCB_VTOR);
+
+        for (i = 0; i < 16 + RP2350_NUM_IRQS; i++)
+            ram_vectors[i] = from[i];
+        RP2350_REG(ARMV8M_SCB_VTOR) = (ULONG)ram_vectors;
+        __asm__ volatile ("dsb\n\tisb" ::: "memory");
+    }
 
     for (i = 0; i < RP2350_NUM_IRQS; i++)
     {
@@ -100,6 +131,77 @@ PFVOID rp2350_connect_irq(int irq, PFVOID handler)
     return old;
 }
 
+/*
+ * Leave one interrupt running and switch every other one off, for as long
+ * as the flash is being written.  PRIMASK would be simpler, but it stops
+ * everything: a 45 ms sector erase then costs five hundred characters at
+ * 115200 baud, and the serial port holds thirty-two.
+ *
+ * Everything that stays alive has to live in SRAM: the entry stub, this
+ * dispatcher, the handler and its data.  Anything else firing here would
+ * read a flash that is not answering.  So the caller names the one
+ * interrupt it has prepared for, and takes the rest away.
+ *
+ * Returns what to hand back to rp2350_int_restore().
+ */
+ULONG rp2350_int_only(int irq)
+{
+    ULONG systick;
+    int i;
+
+    for (i = 0; i < IRQ_WORDS; i++)
+    {
+        irq_enabled_before[i] = NVIC_ISER(i);
+        NVIC_ICER(i) = 0xffffffffUL;
+    }
+    if (irq >= 0 && irq < RP2350_NUM_IRQS)
+        NVIC_ISER(irq / 32) = 1UL << (irq % 32);
+
+    systick = SYST_CSR & SYST_CSR_TICKINT;   /* its handler is in flash */
+    SYST_CSR &= ~SYST_CSR_TICKINT;
+
+    return systick;
+}
+
+/*
+ * Ticks that never happened.
+ *
+ * The handler above lives in flash, so it has to be switched off while
+ * the flash is written, and a 4 KB sector erase takes some 23 ms -- four
+ * or five ticks of the 200 Hz clock.  Dropping them drops time itself:
+ * hz_200 is what GEMDOS timeouts, the time of day and the AES's own tick
+ * are counted in.  A program writing steadily would make the machine's
+ * clock run slow, and not subtly -- measured under a stress test, three
+ * seconds of ticks took twenty-nine seconds to arrive.
+ *
+ * So the caller says how long the flash was away and the clock is put
+ * right afterwards.  Only the count: what the handler would have done
+ * besides counting is a keyboard poll and a redraw, and doing those
+ * five times over from inside a disk write buys nothing.
+ */
+void rp2350_systick_catchup(ULONG us)
+{
+    static ULONG owed;          /* microseconds not yet worth a whole tick */
+    ULONG total = owed + us;
+
+    /* Keeping the remainder matters more than it looks: an erase is worth
+     * four ticks, but programming 512 bytes takes a few hundred
+     * microseconds and there are thousands of those a second.  Thrown
+     * away one at a time, they cost a second in every four. */
+    hz_200 += total / (1000000UL / HZ);
+    owed = total % (1000000UL / HZ);
+}
+
+void rp2350_int_restore(ULONG systick)
+{
+    int i;
+
+    for (i = 0; i < IRQ_WORDS; i++)
+        NVIC_ISER(i) = irq_enabled_before[i];
+    SYST_CSR |= systick;
+}
+
+__attribute__((section(".ramtext")))
 void rp2350_irq_handler(void)
 {
     ULONG ipsr;

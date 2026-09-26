@@ -53,7 +53,7 @@
 #define INT_RT          (1UL << 6)      /* something waiting, FIFO not full */
 #define INT_OE          (1UL << 10)     /* the port itself overran */
 
-#define UART1_IRQ       34              /* UART0 is 33 */
+#define UART1_IRQ       RP2350_UART1_IRQ
 
 #define RESETS_RESET_CLR    RP2350_REG(RP2350_RESETS_BASE + RP2350_REG_CLR + 0x00)
 #define RESETS_RESET_DONE   RP2350_REG(RP2350_RESETS_BASE + 0x08)
@@ -80,6 +80,8 @@ static volatile ULONG rx_lost;
 
 /* ---- the interrupt ---- */
 
+/* in SRAM: this one keeps running while a flash sector is erased */
+__attribute__((section(".ramtext")))
 static void uart1_interrupt(void)
 {
     ULONG mis = UART1_MIS;

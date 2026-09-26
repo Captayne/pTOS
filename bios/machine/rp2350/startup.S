@@ -184,6 +184,11 @@ C_SYM(os_beg):
 // All of them share one priority and never preempt each other, so one
 // stack is enough; only the hardware frame stays on the interrupted stack.
 
+// These two run from SRAM, not from flash: while a flash sector is being
+// erased there is nothing to read there, and one interrupt -- the serial
+// port's -- is deliberately left running through it (rp2350_int_only()).
+        .section .ramtext, "ax"
+
         .balign 4
         .type   systick_entry, %function
 systick_entry:
@@ -202,6 +207,8 @@ irq_entry:
         pop     {r0, lr}
         mov     sp, r0
         bx      lr
+
+        .text
 
         .bss
         .balign 8

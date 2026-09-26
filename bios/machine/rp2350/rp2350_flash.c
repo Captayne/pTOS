@@ -24,6 +24,7 @@
 #include "rp2350.h"
 #include "rp2350_flash.h"
 #include "asm.h"
+#include "rp2350_int.h"
 
 #if CONF_WITH_RP2350_FLASHDISK
 
@@ -44,6 +45,9 @@
 #define QMI_M1_RCMD             RP2350_REG(QMI_BASE + 0x28)
 
 #define EPPB_NMI_MASK0          RP2350_REG(0xe0080000UL)
+
+/* the always-on microsecond counter, to see how long the flash took */
+#define TIMER0_TIMERAWL         RP2350_REG(RP2350_TIMER0_BASE + 0x28)
 
 #define BLOCK_SIZE              0x10000UL       /* 64 KB block erase ... */
 #define BLOCK_ERASE_CMD         0xd8            /* ... the bootrom uses 4 KB
@@ -100,11 +104,28 @@ static void flash_op(ULONG offs, const UBYTE *data, ULONG count, BOOL erase)
 
 static void run_flash_op(ULONG offs, const UBYTE *data, ULONG count, BOOL erase)
 {
+#if CONF_WITH_RP2350_UART1
+    /*
+     * Not PRIMASK: that would stop the serial port as well, and a sector
+     * erase takes 45 ms -- five hundred characters at 115200 baud, into a
+     * port that holds thirty-two.  So everything is switched off except
+     * that one interrupt, whose whole path lives in SRAM.
+     */
+    ULONG systick = rp2350_int_only(RP2350_UART1_IRQ);
+    ULONG start = TIMER0_TIMERAWL;
+
+    flash_op(offs, data, count, erase);
+    /* still masked: nothing else can be counting at the same time */
+    if (systick)
+        rp2350_systick_catchup(TIMER0_TIMERAWL - start);
+    rp2350_int_restore(systick);
+#else
     ULONG primask;
 
     __asm__ volatile ("mrs %0, primask\n\tcpsid i" : "=r"(primask) : : "memory");
     flash_op(offs, data, count, erase);
     __asm__ volatile ("msr primask, %0" : : "r"(primask) : "memory");
+#endif
 }
 
 BOOL rp2350_flash_init(void)
