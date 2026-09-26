@@ -460,6 +460,35 @@ config CONF_WITH_RP2350_UART1
 	  processor away; this one does not.  It is where a radio module or a
 	  sensor board goes.
 
+config CONF_WITH_RP2350_PSRAM
+	bool "RP2350 QSPI PSRAM as Alternate RAM"
+	depends on MACHINE_RP2350 && CONF_WITH_ALT_RAM
+	default y
+	help
+	  A QSPI PSRAM on the QMI's second chip select, offered to programs
+	  as Alternate RAM through Mxalloc().  It cannot be anything else:
+	  the chip answers at 0x11000000 and the on-chip SRAM at 0x20000000,
+	  and TOS memory is one block up to phystop -- the same position the
+	  TT was in with its TT-RAM.
+
+	  The size is read from the chip, and nothing is added if none
+	  answers, so this is safe to leave on with no PSRAM fitted.
+
+config CONF_RP2350_PSRAM_CS_PIN
+	int "GPIO carrying the PSRAM chip select"
+	depends on CONF_WITH_RP2350_PSRAM
+	default 47
+	range 0 47
+	help
+	  Which pin the board wires the PSRAM's chip select to.  The QMI can
+	  only bring its second chip select out on GPIO 0, 8, 19 or 47, so
+	  the boards pick from those four: the Waveshare RP2350B-PiZero uses
+	  47, the WeAct RP2350B core board uses 0.
+
+	  GPIO 47 exists on the RP2350B only.  On an RP2350A it is out of
+	  range and driving it locks the chip up, so a board with an A must
+	  say 0, 8 or 19 here.
+
 config CONF_WITH_RP2350_RTX
 	bool "RP2350 real-time extension (core 1)"
 	depends on MACHINE_RP2350

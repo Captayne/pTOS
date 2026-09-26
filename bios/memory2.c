@@ -24,6 +24,9 @@
 #include "vectors.h"
 #include "../bdos/bdosstub.h"
 #include "amiga.h"
+#if CONF_WITH_RP2350_PSRAM
+#include "rp2350.h"
+#endif
 #include "string.h"
 
 #define ZONECOUNT   32      /* for memory test */
@@ -152,6 +155,17 @@ void altram_init(void)
     /* Add eventual TT-RAM to BDOS pool */
     if (ramtop != NULL)
         xmaddalt(TTRAM_START, ramtop - TTRAM_START);
+#endif
+
+#if CONF_WITH_RP2350_PSRAM
+    /* The PSRAM is not adjacent to the SRAM and never can be, so this is
+     * the only way a program can reach it: Alt-RAM, through Mxalloc(). */
+    if (rp2350_psram_size)
+    {
+        KDEBUG(("xmaddalt(%p, %lu)\n",
+                (UBYTE *)RP2350_PSRAM_BASE, rp2350_psram_size));
+        xmaddalt((UBYTE *)RP2350_PSRAM_BASE, (long)rp2350_psram_size);
+    }
 #endif
 
 #if CONF_WITH_MONSTER

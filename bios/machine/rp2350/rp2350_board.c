@@ -225,6 +225,10 @@ void rp2350_board_init(void)
 
     rp2350_uart0_init();
     rp2350_usbcon_init();
+#if CONF_WITH_RP2350_PSRAM
+    /* before anything asks how much memory there is */
+    rp2350_psram_init();
+#endif
 #if CONF_WITH_RP2350_MONITOR
     rp2350_monitor_init();
 #endif

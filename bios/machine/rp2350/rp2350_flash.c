@@ -43,6 +43,9 @@
 #define QMI_M1_TIMING           RP2350_REG(QMI_BASE + 0x20)
 #define QMI_M1_RFMT             RP2350_REG(QMI_BASE + 0x24)
 #define QMI_M1_RCMD             RP2350_REG(QMI_BASE + 0x28)
+#define QMI_M1_WFMT             RP2350_REG(QMI_BASE + 0x2c)
+#define QMI_M1_WCMD             RP2350_REG(QMI_BASE + 0x30)
+#define XIP_CTRL                RP2350_REG(0x400c8000UL)
 
 #define EPPB_NMI_MASK0          RP2350_REG(0xe0080000UL)
 
@@ -72,14 +75,21 @@ __attribute__((section(".ramtext"), noinline))
 static void flash_op(ULONG offs, const UBYTE *data, ULONG count, BOOL erase)
 {
     ULONG pads[PADS_QSPI_IOS];
-    ULONG m1_timing, m1_rfmt, m1_rcmd, nmi_mask;
+    ULONG m1_timing, m1_rfmt, m1_rcmd, m1_wfmt, m1_wcmd, xip_ctrl, nmi_mask;
     int i;
 
     for (i = 0; i < PADS_QSPI_IOS; i++)
         pads[i] = PADS_QSPI_IO(i);
+    /* Chip select 1 is the PSRAM, if one is fitted.  The bootrom sets the
+     * QMI up for the flash and does not know about it, so all of it has to
+     * be put back -- the write side and the writable bit as much as the
+     * read side, or the memory goes quietly read-only. */
     m1_timing = QMI_M1_TIMING;
     m1_rfmt = QMI_M1_RFMT;
     m1_rcmd = QMI_M1_RCMD;
+    m1_wfmt = QMI_M1_WFMT;
+    m1_wcmd = QMI_M1_WCMD;
+    xip_ctrl = XIP_CTRL;
 
     /* the monitor's NMI would run from flash, which is about to go away */
     nmi_mask = EPPB_NMI_MASK0;
@@ -98,6 +108,9 @@ static void flash_op(ULONG offs, const UBYTE *data, ULONG count, BOOL erase)
     QMI_M1_TIMING = m1_timing;
     QMI_M1_RFMT = m1_rfmt;
     QMI_M1_RCMD = m1_rcmd;
+    QMI_M1_WFMT = m1_wfmt;
+    QMI_M1_WCMD = m1_wcmd;
+    XIP_CTRL = xip_ctrl;
     for (i = 0; i < PADS_QSPI_IOS; i++)
         PADS_QSPI_IO(i) = pads[i];
 }

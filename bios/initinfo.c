@@ -37,6 +37,9 @@
 #if CONF_WITH_RP2350_RTX
 #include "rp2350_rtx.h"
 #endif
+#if CONF_WITH_RP2350_PSRAM
+#include "rp2350.h"
+#endif
 
 #include "initinfo.h"
 #include "conout.h"
@@ -323,6 +326,10 @@ WORD initinfo(ULONG *pshiftbits)
     if (altramsize > 0)
         initinfo_height += 1;
 #endif
+#if CONF_WITH_RP2350_PSRAM
+    if (!rp2350_psram_size)
+        initinfo_height += 2;   /* what the probe saw instead, below */
+#endif
     if (hdd_available)
         initinfo_height += 1;
 
@@ -372,6 +379,32 @@ WORD initinfo(ULONG *pshiftbits)
 #if CONF_WITH_ALT_RAM
     if (altramsize > 0) {
         pair_start("Alt-RAM"); cprintf_bytesize(altramsize); pair_end();
+    }
+#endif
+
+#if CONF_WITH_RP2350_PSRAM
+    /*
+     * Nothing answered on the second chip select.  Say what the probe did
+     * see, here rather than only on the boot console, because this screen
+     * is still there to be read when the console's ring has moved on.
+     *
+     * "cs" is the chip select pin read back while the QMI held it: 0/1 is
+     * correct and means our side works, anything else means the pin is not
+     * what we think it is.  Then the eight bytes the identify command
+     * returned -- all ff is a bus nobody drives, all 00 one held low -- and
+     * a trailing * if reading it a second time gave something different.
+     */
+    if (!rp2350_psram_size) {
+        pair_start("PSRAM");
+        cprintf("none, cs %d/%d", rp2350_psram_seen.cs_asserted,
+                rp2350_psram_seen.cs_idle);
+        pair_end();
+        pair_start("PSRAM id");
+        for (i = 0; i < 8; i++)
+            cprintf("%02x", rp2350_psram_seen.id[i]);
+        if (memcmp(rp2350_psram_seen.id, rp2350_psram_seen.id2, 8) != 0)
+            cprintf(" *");
+        pair_end();
     }
 #endif
 

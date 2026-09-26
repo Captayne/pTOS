@@ -109,6 +109,24 @@
 #define RP2350_REG(addr)        (*(volatile ULONG *)(addr))
 
 void rp2350_board_init(void);
+#if CONF_WITH_RP2350_PSRAM
+void rp2350_psram_init(void);       /* the QSPI PSRAM on chip select 1 */
+extern ULONG rp2350_psram_size;     /* 0 when none answered */
+extern ULONG rp2350_psram_id;
+
+/*
+ * What the probe saw on the way, so that a board where nothing answers
+ * can still say something (initinfo.c prints it when the size is 0).
+ */
+struct rp2350_psram_probe {
+    UBYTE id[8];        /* the answer to the 0x9f identify command */
+    UBYTE id2[8];       /* and again: the same wrong answer twice is a
+                         * wire, two different ones are the sampling */
+    UBYTE cs_asserted;  /* the chip select pin, read back while asserted */
+    UBYTE cs_idle;      /*  ... and while released.  Must be 0 and 1. */
+};
+extern struct rp2350_psram_probe rp2350_psram_seen;
+#endif
 void rp2350_gpio_set_function(int gpio, int func);
 void rp2350_gpio_pull_up(int gpio);
 
