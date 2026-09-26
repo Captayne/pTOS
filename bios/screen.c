@@ -807,7 +807,8 @@ static ULONG initial_vram_size(void)
 #elif defined(MACHINE_LISA)
     return 32*1024UL;
 #elif CONF_WITH_RP2350_LCD
-    return 16*1024UL;       /* 320x240 monochrome needs 9600 bytes */
+    /* a little over, like every version of Atari TOS: see above */
+    return RP2350_LCD_VRAM_SIZE + 2048UL;
 #else
     ULONG vram_size;
 
@@ -950,8 +951,7 @@ void screen_get_current_mode_desc(SCREEN_MODE_DESC *desc)
     amiga_get_current_mode_info(&planes, &hz_rez, &vt_rez);
     planar_mode_desc(desc, planes, hz_rez, vt_rez);
 #elif CONF_WITH_RP2350_LCD
-    rp2350_lcd_get_mode(&planes, &hz_rez, &vt_rez);
-    planar_mode_desc(desc, planes, hz_rez, vt_rez);
+    rp2350_lcd_get_mode_desc(desc);
 #else
     atari_get_current_mode_info(&planes, &hz_rez, &vt_rez);
     planar_mode_desc(desc, planes, hz_rez, vt_rez);
@@ -981,6 +981,14 @@ WORD get_palette(void)
         return 0;
     }
 #endif
+
+    /*
+     * A truecolor screen has no palette to choose a colour from: the pixel
+     * is the colour.  TOS 4.04 answers 0 for the Falcon's 16-bit modes for
+     * the same reason, in the has_videl branch above.
+     */
+    if (linea_vars.v_planes > 8)
+        return 0;
 
     palette = 4096;         /* for STe/TT colour modes */
 

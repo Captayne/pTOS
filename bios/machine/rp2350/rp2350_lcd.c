@@ -6,13 +6,17 @@
  * This file is distributed under the GPL, version 2 or at your
  * option any later version.  See doc/license.txt for details.
  *
- * pTOS draws into an ordinary monochrome framebuffer in SRAM, 320x240,
- * one bit per pixel (9600 bytes), exactly like the ST high resolution
- * but smaller.  The display wants 16 bits per pixel over SPI, so a PIO
- * state machine turns every framebuffer bit into 16 SPI clocks of either
- * black or white, fed by DMA from the framebuffer.  A whole frame goes
- * out about 20 times a second (SPI at 25 MHz) without any CPU time; the
- * system timer only starts the next frame when the previous one is done.
+ * pTOS draws into a packed RGB565 framebuffer in SRAM, 320x240, 16 bits
+ * per pixel (153600 bytes) -- which is what the display itself wants, so
+ * a PIO state machine only has to clock the words out, fed by DMA
+ * straight from the framebuffer.  A whole frame goes out about 20 times a
+ * second (SPI at 25 MHz) without any CPU time; the system timer only
+ * starts the next frame when the previous one is done.
+ *
+ * Colour costs no SPI time at all: the monochrome mode this replaces
+ * expanded every framebuffer bit into 16 SPI clocks of black or white, so
+ * the wire already carried a full RGB565 frame.  What the 65536 colours
+ * cost is SRAM, 153600 bytes where one bitplane needed 9600.
  *
  * The touch controller is polled every 10 ms on SPI0 and drives the
  * mouse: position through relative IKBD mouse packets towards the touched
@@ -34,6 +38,7 @@
 #include "cookie.h"
 #include "kprint.h"
 #include "touch.h"
+#include "screen_mode.h"
 
 #if CONF_WITH_RP2350_LCD
 
@@ -107,22 +112,20 @@
 
 #define WIDTH           320
 #define HEIGHT          240
-#define FRAME_WORDS     (WIDTH * HEIGHT / 16)  /* UWORDs */
+#define FRAME_WORDS     (WIDTH * HEIGHT)    /* UWORDs: one per pixel */
 
 /*
- * PIO program: every framebuffer bit becomes one 16-bit RGB565 pixel.
- * SCK is side-set, MOSI the OUT pin.  A set bit is a black pixel on the
- * ST's monochrome screen, so the bit is inverted: 1 -> 0x0000, 0 -> 0xffff.
- * SPI mode 0: MOSI changes while SCK is low, the display samples on the
- * rising edge.  Two PIO cycles per SPI bit.
+ * PIO program: shift the framebuffer out a bit at a time, most
+ * significant first, which is the order the display reads an RGB565
+ * pixel in.  SCK is side-set, MOSI the OUT pin.  SPI mode 0: MOSI changes
+ * while SCK is low, the display samples on the rising edge.  Two PIO
+ * cycles per SPI bit.
  */
 static const UWORD lcd_prog[] = {
-    0x6021,     /* 0: out x, 1          side 0  ; next pixel (autopull)  */
-    0xe04f,     /* 1: set y, 15         side 0                           */
-    0xa009,     /* 2: mov pins, ~x      side 0  ; MOSI = colour bit      */
-    0x1082      /* 3: jmp y--, 2        side 1  ; SCK high               */
+    0x6001,     /* 0: out pins, 1       side 0  ; MOSI = next bit        */
+    0x1000      /* 1: jmp 0             side 1  ; SCK high               */
 };
-#define PROG_LEN    4
+#define PROG_LEN    2
 #define PIO_CLKDIV  3           /* 50 MHz PIO clock: 25 MHz SPI.  The
                                  * ILI9341 is specified for 10 MHz writes,
                                  * but takes much more; 37.5 MHz failed
@@ -576,16 +579,12 @@ static const short cal_points[CAL_POINTS][2] = {
 
 static void put_pixel(WORD x, WORD y, BOOL on)
 {
-    /* screen memory: native words, bit 15 the leftmost pixel */
-    UWORD *w = (UWORD *)v_bas_ad + y * (WIDTH / 16) + x / 16;
-    UWORD m = 0x8000 >> (x & 15);
-
     if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
         return;
-    if (on)
-        *w |= m;
-    else
-        *w &= ~m;
+
+    /* the crosses are drawn before any workstation is open, so straight
+     * into the framebuffer rather than through the VDI's palette */
+    *((UWORD *)v_bas_ad + (ULONG)y * WIDTH + x) = on ? 0x0000 : 0xffff;
 }
 
 static void draw_cross(const short *p, BOOL on)
@@ -698,11 +697,30 @@ void rp2350_lcd_tick(void)
         touch_poll();
 }
 
+/*
+ * 16 "planes" is how the VDI spells 16 bits per pixel: v_planes only
+ * feeds BYTES_LIN (V_REZ_HZ / 8 * v_planes, which is the right pitch for
+ * a packed depth too) and the pen counts, and TRUECOLOR_MODE is
+ * v_planes > 8.  Which renderer actually draws comes from the descriptor
+ * below, never from this.
+ */
 void rp2350_lcd_get_mode(UWORD *planes, UWORD *hz_rez, UWORD *vt_rez)
 {
-    *planes = 1;
+    *planes = 16;
     *hz_rez = WIDTH;
     *vt_rez = HEIGHT;
+}
+
+void rp2350_lcd_get_mode_desc(SCREEN_MODE_DESC *desc)
+{
+    desc->width = WIDTH;
+    desc->height = HEIGHT;
+    desc->pitch = WIDTH * sizeof(UWORD);
+    desc->bits_per_pixel = 16;
+    desc->layout = SCREEN_LAYOUT_PACKED;
+    desc->color_model = SCREEN_COLOR_TRUECOLOR;
+    desc->pixel_format = SCREEN_PIXEL_RGB565;
+    desc->shifter = SCREEN_SHIFTER_NONE;     /* no hardware palette */
 }
 
 void rp2350_lcd_init(void)
@@ -742,7 +760,11 @@ void rp2350_lcd_init(void)
     lcd_cmd0(0x11);                     /* sleep out */
     ms(120);
     lcd_cmd1(0x3a, 0x55);               /* 16 bits per pixel */
-    lcd_cmd1(0x36, 0x28);               /* landscape (MV), BGR order */
+    /* Landscape (MV).  Bit 3 would tell the controller to read the high
+     * five bits of a pixel as blue instead of red; the framebuffer holds
+     * R5G6B5, so it stays clear.  If red and blue come out exchanged on a
+     * panel whose glass is wired the other way round, this is the bit. */
+    lcd_cmd1(0x36, 0x20);
     lcd_cmd4(0x2a, 0, 0, (WIDTH - 1) >> 8, (WIDTH - 1) & 0xff);   /* columns */
     lcd_cmd4(0x2b, 0, 0, (HEIGHT - 1) >> 8, (HEIGHT - 1) & 0xff); /* pages */
     lcd_cmd0(0x29);                     /* display on */

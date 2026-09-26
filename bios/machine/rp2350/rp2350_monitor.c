@@ -58,18 +58,30 @@ static void mon_puthex(ULONG v)
 }
 
 #if CONF_WITH_RP2350_LCD
+/*
+ * The screen as a picture on the console: one character per 2x2 block of
+ * RGB565 pixels, darkest to lightest.  A hex dump of the framebuffer was
+ * readable while it held one bit per pixel; 153600 bytes of it are not,
+ * and what this is for is seeing whether there is an image at all.
+ */
 static void mon_dump_fb(void)
 {
-    const UBYTE *p = v_bas_ad;
+    static const char ramp[] = " .:-=+*#%@";
+    const UWORD *fb = (const UWORD *)v_bas_ad;
     int x, y;
 
-    for (y = 0; y < 240; y++)
+    for (y = 0; y < 240; y += 2)
     {
         mon_puts("[fb]");
-        for (x = 0; x < 320 / 8; x++, p++)
+        for (x = 0; x < 320; x += 2)
         {
-            rp2350_usbcon_putc((UBYTE)"0123456789abcdef"[*p >> 4]);
-            rp2350_usbcon_putc((UBYTE)"0123456789abcdef"[*p & 0xf]);
+            const UWORD *p = fb + (ULONG)y * 320 + x;
+            /* green carries most of the brightness and is the widest
+             * field, so it stands in for luminance */
+            UWORD sum = ((p[0] >> 5) & 0x3f) + ((p[1] >> 5) & 0x3f)
+                      + ((p[320] >> 5) & 0x3f) + ((p[321] >> 5) & 0x3f);
+
+            rp2350_usbcon_putc((UBYTE)ramp[sum * 9 / (4 * 0x3f)]);
         }
         mon_puts("\r\n");
     }

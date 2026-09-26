@@ -26,9 +26,19 @@
 #include "endian.h"             /* for SCREEN_BYTE() */
 #include "raspi_screen.h"
 #include "../vdi/vdi_defs.h"    /* for phys_work stuff */
+#include "../vdi/vdi_backend.h" /* for vdi_truecolor_pixel_for_index() */
 #include "gsxdefs.h"
 
 #define PLANE_OFFSET    2       /* interleaved planes */
+
+/*
+ * Packed 16 bits per pixel: the Falcon's chunky modes, and every screen
+ * the packed-truecolor VDI backend drives -- RGB565 either way, so the
+ * same cell arithmetic.  The console writes to the framebuffer itself,
+ * before any workstation is open, so it cannot ask the VDI to draw and
+ * needs its own copy of it.
+ */
+#define CONOUT_16BIT (CONF_WITH_VIDEL || CONF_WITH_VDI_BACKEND_TRUECOLOR)
 
 #if CONF_WITH_VIDEL
 static const UWORD falcon_default_palette[16] = {
@@ -39,6 +49,31 @@ static const UWORD falcon_default_palette[16] = {
 
 #if CONF_WITH_VDI_16BIT
 extern Vwk phys_work;           /* attribute area for physical workstation */
+#endif
+
+#if CONOUT_16BIT
+/*
+ * What colour a VDI pen is, as an RGB565 pixel.
+ *
+ * The Falcon keeps its own answer: its chunky modes report a planar
+ * descriptor with 16 planes, so the planar renderer draws them and there
+ * is no truecolor pseudo-palette to read.  Everywhere else the
+ * packed-truecolor backend has one, seeded before the first workstation
+ * opens, and it is the same palette the VDI will draw with -- so the boot
+ * console and the desktop agree on what pen 1 looks like.
+ */
+static UWORD console_pixel16(WORD color)
+{
+#if CONF_WITH_VIDEL
+#if CONF_WITH_VDI_16BIT
+    if (phys_work.ext)
+        return phys_work.ext->palette[color];
+#endif
+    return falcon_default_palette[color & 0xf];
+#else
+    return (UWORD)vdi_truecolor_pixel_for_index(color);
+#endif
+}
 #endif
 
 /*
@@ -229,9 +264,9 @@ ascii_out (int ch)
  *   boty - bottom/right cell y position
  */
 
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
 /*
- * blank_out16 - blank_out() for Falcon 16-bit graphics
+ * blank_out16 - blank_out() for packed 16-bit graphics
  *
  * see the header comments in blank_out() for more details
  */
@@ -249,17 +284,7 @@ static void blank_out16(int topx, int topy, int botx, int boty)
 
     rows = (boty - topy + 1) * linea_vars.v_cel_ht;    /* in pixels */
 
-    /* set standard background colour */
-    bgcol = falcon_default_palette[linea_vars.v_col_bg & 0xf];
-
-#if CONF_WITH_VDI_16BIT
-    /*
-     * if we're already in 16-bit mode, we can get the pixel value of
-     * the background colour from the physical workstation's palette instead
-     */
-    if (phys_work.ext)
-        bgcol = phys_work.ext->palette[linea_vars.v_col_bg];
-#endif
+    bgcol = console_pixel16(linea_vars.v_col_bg);
 
     addr = (UWORD *)cell_addr(topx, topy);  /* running pointer to screen */
     for (i = 0; i < rows; i++) {
@@ -281,7 +306,7 @@ blank_out (int topx, int topy, int botx, int boty)
         return;
     }
 #endif
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
     if (TRUECOLOR_MODE) {
         blank_out16(topx, topy, botx, boty);
         return;
@@ -392,7 +417,7 @@ static UBYTE *cell_addr(UWORD x, UWORD y)
         disx = 8UL * (linea_vars.v_planes / 8) * x;
     else
 #endif
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
     if (TRUECOLOR_MODE) {       /* chunky pixels */
         disx = linea_vars.v_planes * x;
     }
@@ -424,9 +449,9 @@ static UBYTE *cell_addr(UWORD x, UWORD y)
 
 
 
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
 /*
- * cell_xfer16 - cell_xfer() for Falcon 16-bit graphics
+ * cell_xfer16 - cell_xfer() for packed 16-bit graphics
  *
  * see the comments in cell_xfer() for more details
  */
@@ -451,20 +476,8 @@ static void cell_xfer16(UBYTE *src, UBYTE *dst)
         bg = linea_vars.v_col_bg;
     }
 
-    /*
-     * if we have 16-bit support in VDI and if the VDI workstation is initialized,
-     * we use its palette, otherwise, e.g. at boot, we use a default palette.
-     */
-#if CONF_WITH_VDI_16BIT
-    if (phys_work.ext) {
-        fgcol = phys_work.ext->palette[fg];
-        bgcol = phys_work.ext->palette[bg];
-    } else
-#endif
-    {
-        fgcol = falcon_default_palette[fg & 0xf];
-        bgcol = falcon_default_palette[bg & 0xf];
-    }
+    fgcol = console_pixel16(fg);
+    bgcol = console_pixel16(bg);
 
     for (i = linea_vars.v_cel_ht; i--; ) {
         for (mask = 0x80, p = (UWORD *)dst; mask; mask >>= 1) {
@@ -513,7 +526,7 @@ static void cell_xfer(UBYTE *src, UBYTE *dst)
     }
 #endif
 
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
     if (TRUECOLOR_MODE) {
         cell_xfer16(src, dst);
         return;
@@ -627,7 +640,7 @@ static void neg_cell(UBYTE *cell)
     }
     else
 #endif
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
     if (TRUECOLOR_MODE) {               /* chunky pixels */
         for (len = cell_len; len--; ) {
             WORD i;
@@ -694,7 +707,7 @@ static BOOL next_cell(void)
         return 0;
     }
 #endif
-#if CONF_WITH_VIDEL
+#if CONOUT_16BIT
     if (TRUECOLOR_MODE) {               /* chunky pixels */
         linea_vars.v_cur_ad += 16;
         return 0;

@@ -24,8 +24,9 @@ config CONF_WITH_VDI_BACKEND_PLANAR
 	  Pi -- wants.  At least one renderer must stay enabled.
 
 config CONF_WITH_VDI_BACKEND_TRUECOLOR
-	bool "Packed truecolor VDI backend" if !MACHINE_RPI
-	default y if MACHINE_RPI || MACHINE_VIRT_ARM || MACHINE_VIRT_M68K
+	bool "Packed truecolor VDI backend" if !MACHINE_RPI && !CONF_WITH_RP2350_LCD
+	default y if MACHINE_RPI || CONF_WITH_RP2350_LCD \
+		|| MACHINE_VIRT_ARM || MACHINE_VIRT_M68K
 	default n
 	help
 	  Build the packed-truecolor VDI backend (vdi_backend_truecolor.o),
@@ -36,7 +37,9 @@ config CONF_WITH_VDI_BACKEND_TRUECOLOR
 	  truecolor mode, so this backend is mandatory there: the prompt is
 	  hidden (and the option forced to y) whenever MACHINE_RPI is set,
 	  since turning it off would leave the RPi screen with no matching
-	  renderer.
+	  renderer.  The RP2350's SPI display is the same case -- the panel
+	  wants RGB565 on the wire whatever the framebuffer holds, so there
+	  is nothing to gain from feeding it a bitplane.
 
 config CONF_WITH_VDI_BACKEND_TRUECOLOR32
 	bool "Packed 32bpp XRGB8888 truecolor VDI backend"

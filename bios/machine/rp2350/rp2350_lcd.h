@@ -10,9 +10,19 @@
 #ifndef RP2350_LCD_H
 #define RP2350_LCD_H
 
+#include "screen_mode.h"
+
+/*
+ * What the framebuffer needs: 320 x 240 packed RGB565.  screen.c asks for
+ * this before any workstation exists, so it cannot go through the mode
+ * descriptor.
+ */
+#define RP2350_LCD_VRAM_SIZE    (320UL * 240UL * 2)
+
 void rp2350_lcd_init(void);
 void rp2350_lcd_tick(void);
 void rp2350_lcd_get_mode(UWORD *planes, UWORD *hz_rez, UWORD *vt_rez);
+void rp2350_lcd_get_mode_desc(SCREEN_MODE_DESC *desc);
 void rp2350_lcd_boot_calibration(void);
 void armv8m_delay(ULONG count);
 

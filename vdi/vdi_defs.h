@@ -21,8 +21,17 @@ struct vdi_backend_ops;   /* forward declaration -- full definition in vdi_backe
 
 #define HAVE_BEZIER 0           /* switch on bezier capability - entirely untested */
 
+/*
+ * 256 rather than 16 colour registers, and the larger mouse cursor save
+ * area that goes with them (mcs_ptr, update_rez_dependent()).  Every
+ * truecolor screen needs both: numcolors is DEV_TAB[13], which is 256
+ * whenever v_planes >= 8, so MAP_COL[] is indexed that far (see
+ * vdi_truecolor_init_palette()), and one 16x16 cursor at 16 bits per
+ * pixel needs 128 longs where the line-A save area holds 64.
+ */
 #define EXTENDED_PALETTE (CONF_WITH_VIDEL || CONF_WITH_TT_SHIFTER \
-    || defined(MACHINE_RPI) || CONF_WITH_VDI_BACKEND_TRUECOLOR32)
+    || defined(MACHINE_RPI) || CONF_WITH_VDI_BACKEND_TRUECOLOR \
+    || CONF_WITH_VDI_BACKEND_TRUECOLOR32)
 
 #define TRUECOLOR_MODE  (linea_vars.v_planes > 8)
 
