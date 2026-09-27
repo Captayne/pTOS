@@ -125,6 +125,19 @@ LONG disk_lend_sd(WORD on)
 {
     sd_lent = on ? TRUE : FALSE;
     sd_changed = TRUE;
+
+    /*
+     * Taking it back means starting the card again, not just allowing
+     * ourselves to touch it.  The other machine leaves it wherever its
+     * last command left it, and a card in the middle of something stays
+     * there: resetting the processor does not reset the card, which is
+     * why it stayed wedged across several reboots until it was pulled
+     * out and put back.  sd_init() runs the detection again, which is
+     * the same thing by hand.
+     */
+    if (!on)
+        sd_init();
+
     return E_OK;
 }
 #endif

@@ -70,7 +70,20 @@
  *  SD timeouts
  */
                             /* a useful macro */
-#define msec_to_ticks(msec)     ((msec*CLOCKS_PER_SEC+999)/1000)
+/*
+ *  Deadlines are measured with monotonic_usec() (bios/delay.h), not with
+ *  hz_200.  The system clock is incremented by the timer interrupt, so
+ *  inside another interrupt handler -- and on the RP2350 no interrupt
+ *  preempts another -- it stands still and a mark taken from it is never
+ *  reached.  This driver is called from the USB mass storage's interrupt
+ *  when the card is lent to another machine (rp2350_usbmsc.c), and would
+ *  there wait for a hand it was itself holding.
+ *
+ *  The polling loops are unchanged: only what tells them the time has.
+ */
+#define msec_to_usec(msec)      ((ULONG)(msec) * 1000UL)
+#define DEADLINE(msec)          (monotonic_usec() + msec_to_usec(msec))
+#define BEFORE(end)             ((LONG)(monotonic_usec() - (end)) < 0)
                             /* these are byte-count timeout values */
 #define SD_CMD_TIMEOUT          8       /* between sending crc & receiving response */
 /* The SD specification allows 8 bytes (NCX) between SEND_CSD and its data,
@@ -84,10 +97,6 @@
 #define SD_READ_TIMEOUT_MSEC    100     /* waiting for start bit of data block */
 #define SD_WRITE_TIMEOUT_MSEC   500     /* waiting for end of busy */
                             /* these are derived timeout values in TOS ticks */
-#define SD_POWERUP_DELAY_TICKS  msec_to_ticks(SD_POWERUP_DELAY_MSEC)
-#define SD_INIT_TIMEOUT_TICKS   msec_to_ticks(SD_INIT_TIMEOUT_MSEC)
-#define SD_READ_TIMEOUT_TICKS   msec_to_ticks(SD_READ_TIMEOUT_MSEC)
-#define SD_WRITE_TIMEOUT_TICKS  msec_to_ticks(SD_WRITE_TIMEOUT_MSEC)
 
 /*
  *  SD data tokens
@@ -138,9 +147,9 @@ static LONG sd_read(UWORD drv,ULONG sector,UWORD count,UBYTE *buf);
 static int sd_receive_data(UBYTE *buf,UWORD len,UWORD special);
 static int sd_send_data(UBYTE *buf,UWORD len,UBYTE token);
 static int sd_special_read(UBYTE cmd,UBYTE *data);
-static int sd_wait_for_not_busy(LONG timeout);
+static int sd_wait_for_not_busy(LONG msec);
 static int sd_wait_for_not_idle(UBYTE cmd,ULONG arg);
-static int sd_wait_for_ready(LONG timeout);
+static int sd_wait_for_ready(LONG msec);
 static LONG sd_write(UWORD drv,ULONG sector,UWORD count,UBYTE *buf);
 
 
@@ -515,7 +524,7 @@ static int sd_command(UBYTE cmd,ULONG argument,UBYTE crc,UBYTE resp_type,UBYTE *
      *  2. it cleans up any residual data that the card may be sending as
      *     a result of a previous command that experienced problems.
      */
-    if (sd_wait_for_ready(SD_READ_TIMEOUT_TICKS) < 0)
+    if (sd_wait_for_ready(SD_READ_TIMEOUT_MSEC) < 0)
         return -1;
 
     /* Send the command byte, argument, crc */
@@ -556,7 +565,7 @@ static int sd_command(UBYTE cmd,ULONG argument,UBYTE crc,UBYTE resp_type,UBYTE *
      *  so we use the write timeout here.
      */
     if (resp_type == R1B)
-        if (sd_wait_for_not_busy(SD_WRITE_TIMEOUT_TICKS) < 0)
+        if (sd_wait_for_not_busy(SD_WRITE_TIMEOUT_MSEC) < 0)
             return -1;
 
     return resp[0];
@@ -586,8 +595,8 @@ UBYTE token;
                 break;
         }
     } else {
-        ULONG end = hz_200 + SD_READ_TIMEOUT_TICKS;
-        while(hz_200 < end) {
+        ULONG end = DEADLINE(SD_READ_TIMEOUT_MSEC);
+        while(BEFORE(end)) {
             token = spi_recv_byte();
             if (token != 0xff)
                 break;
@@ -648,7 +657,7 @@ UBYTE rtoken;
         }
     }
 
-    return sd_wait_for_not_busy(SD_WRITE_TIMEOUT_TICKS);
+    return sd_wait_for_not_busy(SD_WRITE_TIMEOUT_MSEC);
 }
 
 /*
@@ -851,9 +860,9 @@ ULONG pattern;
  */
 static int sd_wait_for_not_idle(UBYTE cmd,ULONG arg)
 {
-ULONG end = hz_200 + SD_INIT_TIMEOUT_TICKS;
+ULONG end = DEADLINE(SD_INIT_TIMEOUT_MSEC);
 
-    while(hz_200 < end) {
+    while(BEFORE(end)) {
         if (cmd == ACMD41)
             if (sd_command(CMD55,0L,0,R1,response) < 0)
                 break;
@@ -869,17 +878,17 @@ ULONG end = hz_200 + SD_INIT_TIMEOUT_TICKS;
 /*
  *  wait for not busy indication
  *
- *  note: timeout value is in ticks
+ *  note: timeout value is in milliseconds
  *
  *  returns -1  timeout
  *          0   ok
  */
-static int sd_wait_for_not_busy(LONG timeout)
+static int sd_wait_for_not_busy(LONG msec)
 {
-ULONG end = hz_200 + timeout;
+ULONG end = DEADLINE(msec);
 UBYTE c;
 
-    while(hz_200 < end) {
+    while(BEFORE(end)) {
         c = spi_recv_byte();
         if (c != 0x00)
             return 0;
@@ -891,17 +900,17 @@ UBYTE c;
 /*
  *  wait for ready indication
  *
- *  note: timeout value is in ticks
+ *  note: timeout value is in milliseconds
  *
  *  returns -1  timeout
  *          0   ok
  */
-static int sd_wait_for_ready(LONG timeout)
+static int sd_wait_for_ready(LONG msec)
 {
-ULONG end = hz_200 + timeout;
+ULONG end = DEADLINE(msec);
 UBYTE c;
 
-    while(hz_200 < end) {
+    while(BEFORE(end)) {
         c = spi_recv_byte();
         if (c == 0xff)
             return 0;

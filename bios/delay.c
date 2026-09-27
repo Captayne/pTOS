@@ -21,6 +21,7 @@
 #include "serport.h"
 #include "processor.h"
 #include "delay.h"
+#include "tosvars.h"     /* hz_200 */
 #include "coldfire.h" /* For cookie jar info. */
 
 /*
@@ -37,6 +38,27 @@
  * global variables
  */
 ULONG loopcount_1_msec;
+
+/*
+ * The RP2350 has an always-on microsecond counter in hardware (the same
+ * one rp2350_flash.c reads to time the window in which it has masked
+ * every interrupt).  Everywhere else, the system clock converted --
+ * which is what the callers used to do for themselves, and is right
+ * whenever the timer is running.
+ */
+#ifdef MACHINE_RP2350
+#define TIMER0_TIMERAWL     (*(volatile ULONG *)(0x400b0000UL + 0x28))
+
+ULONG monotonic_usec(void)
+{
+    return TIMER0_TIMERAWL;
+}
+#else
+ULONG monotonic_usec(void)
+{
+    return hz_200 * (1000000UL / CLOCKS_PER_SEC);
+}
+#endif
 
 /*
  * function prototypes (functions in delayasm.S)

@@ -24,6 +24,28 @@
 extern ULONG loopcount_1_msec;
 
 /*
+ * Microseconds from a counter nobody has to maintain.
+ *
+ * hz_200 is the system clock and is the right thing to measure by in a
+ * task -- but it is incremented by the timer interrupt, so inside any
+ * other interrupt handler on a machine whose interrupts do not preempt
+ * each other it stands still, and a deadline computed from it is never
+ * reached.  A driver waiting that way waits for a hand it is itself
+ * holding.
+ *
+ * Where the hardware has a free-running counter this returns it, and a
+ * deadline works wherever it is set.  Where it does not, this is hz_200
+ * converted, which is no worse than what the caller would have written.
+ *
+ * It wraps.  Compare differences, never values:
+ *
+ *     ULONG end = monotonic_usec() + microseconds;
+ *     while ((LONG)(monotonic_usec() - end) < 0)
+ *         ...
+ */
+ULONG monotonic_usec(void);
+
+/*
  * function prototypes
  */
 void init_delay(void);
