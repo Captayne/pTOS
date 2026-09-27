@@ -108,6 +108,26 @@ int ultrasatan_id;
 /*==== Internal declarations ==============================================*/
 #if !CONF_WITH_EXTERNAL_DISK_DRIVER
 static int atari_partition(UWORD unit,LONG *devices_available);
+
+#if CONF_WITH_SDMMC && defined(MACHINE_RP2350)
+/*
+ * The card can be lent to the other machine over USB (rp2350_usbmsc.c).
+ * Two file systems with their own caches on one medium corrupt it, and
+ * not eventually -- reliably.  So it is lent exclusively: while it is
+ * away every access to it is refused, and it counts as changed in both
+ * directions so that GEMDOS throws away what it thought it knew.  That
+ * is the mechanism TOS has always had for somebody swapping a floppy.
+ */
+static BOOL sd_lent;
+static BOOL sd_changed;
+
+LONG disk_lend_sd(WORD on)
+{
+    sd_lent = on ? TRUE : FALSE;
+    sd_changed = TRUE;
+    return E_OK;
+}
+#endif
 #endif
 #if DETECT_NATIVE_FEATURES
 static LONG natfeats_inquire(UWORD unit, ULONG *blocksize, ULONG *deviceflags, char *productname, UWORD stringlen);
@@ -467,6 +487,19 @@ LONG disk_mediach(UWORD unit)
 #endif /* CONF_WITH_IDE */
 #if CONF_WITH_SDMMC
     case SDMMC_BUS:
+#ifdef MACHINE_RP2350
+        if (sd_changed)
+        {
+            sd_changed = FALSE;
+            ret = MEDIACHANGE;
+            break;
+        }
+        if (sd_lent)
+        {
+            ret = MEDIACHANGE;  /* still gone, and still not ours */
+            break;
+        }
+#endif
         ret = sd_ioctl(reldev,GET_MEDIACHANGE,NULL);
         break;
 #endif /* CONF_WITH_SDMMC */
@@ -1242,6 +1275,10 @@ LONG disk_get_capacity(UWORD unit, ULONG *blocks, ULONG *blocksize)
 #endif /* CONF_WITH_IDE */
 #if CONF_WITH_SDMMC
     case SDMMC_BUS:
+#ifdef MACHINE_RP2350
+        if (sd_lent)
+            return EDRVNR;
+#endif
         ret = sd_ioctl(reldev,GET_DISKINFO,info);
         KDEBUG(("sd_ioctl(%d) returned %ld\n", reldev, ret));
         if (ret < 0)
@@ -1335,6 +1372,10 @@ LONG disk_rw(UWORD unit, UWORD rw, ULONG sector, UWORD count, UBYTE *buf)
 #endif /* CONF_WITH_IDE */
 #if CONF_WITH_SDMMC
     case SDMMC_BUS:
+#ifdef MACHINE_RP2350
+        if (sd_lent)
+            return EDRVNR;      /* the other machine has it */
+#endif
         ret = sd_rw(rw, sector, count, buf, reldev);
         KDEBUG(("sd_rw() returned %ld\n", ret));
         break;

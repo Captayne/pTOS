@@ -1,5 +1,5 @@
 /*
- * deskusb.c - "Share flash via USB" in the desktop's Options menu
+ * deskusb.c - lending the SD card to the other machine, from the menu
  *
  * Copyright (C) 2026 The pTOS development team
  *
@@ -7,10 +7,15 @@
  * option any later version.  See doc/license.txt for details.
  *
  * A checked item: while it is ticked, the machine at the other end of
- * the USB cable sees the flash drive as a removable disk, and this one
- * refuses every access to it.  Unticked, the drive comes back reported
- * as changed, so GEMDOS re-reads what it had cached -- the floppy swap
- * mechanism.  Everything goes through the _UDR cookie (include/usbdrv.h).
+ * the USB cable sees the whole SD card -- partition table and all -- as
+ * a removable disk, and this one refuses every drive on it.  Unticked,
+ * the card comes back reported as changed, so GEMDOS re-reads what it
+ * had cached; that is the floppy swap mechanism, doing what it was
+ * always for.  Everything goes through the _UDR cookie
+ * (include/usbdrv.h).
+ *
+ * The menu label still says "flash" because it lives in the binary
+ * resource (desk/desktop.rsc), which wants a resource editor.
  */
 
 #include "emutos.h"
@@ -50,7 +55,7 @@ void usbdrive_toggle(void)
 {
     if (!usbdrive_present())
     {
-        form_alert(1, "[1][There is no flash drive|to share.][ OK ]");
+        form_alert(1, "[1][There is no card to share.][ OK ]");
         return;
     }
 
@@ -60,14 +65,33 @@ void usbdrive_toggle(void)
         return;
     }
 
-    if (form_alert(1, "[2][F: goes to the machine at the|"
-                      "other end of the USB cable and|"
-                      "cannot be used here meanwhile.|"
-                      "Eject it there before|unticking.][Share|Cancel]") != 1)
+    if (form_alert(1, "[2][The card goes to the machine|"
+                      "at the other end of the cable.|"
+                      "C: and D: cannot be used here|"
+                      "meanwhile.  Eject it there|"
+                      "before unticking.][Share|Cancel]") != 1)
         return;
 
-    if (udr->share(1) != 0)
-        form_alert(1, "[1][The drive could not be|handed over.][ OK ]");
+    /*
+     * It refuses while a deploy is in flight: that is writing to a drive
+     * on this very card, and handing it over underneath would pull the
+     * medium out from under GEMDOS's buffers.
+     */
+    switch (udr->share(1))
+    {
+    case 0:
+        break;
+    case -36:                   /* EACCDN: the interlock */
+        form_alert(1, "[1][Not while an upload is|running.][ OK ]");
+        break;
+    case -11:                   /* EREADF: it let go, but cannot read */
+        form_alert(1, "[1][The card was handed over but|"
+                      "cannot be read.][ OK ]");
+        break;
+    default:
+        form_alert(1, "[1][The card could not be|handed over.][ OK ]");
+        break;
+    }
 }
 
 #endif /* CONF_WITH_USB_DRIVE_MENU */

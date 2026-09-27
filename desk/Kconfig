@@ -46,14 +46,15 @@ config CONF_WITH_WIFI_SETTINGS
 	  The key is kept in plain text.
 
 config CONF_WITH_USB_DRIVE_MENU
-	bool "Share the flash drive over USB from the Options menu"
-	depends on CONF_WITH_RP2350_FLASHDISK
+	bool "Lend the card over USB from the desktop's menu"
+	depends on CONF_WITH_RP2350_USBMSC
 	default y
 	help
-	  "Share flash via USB" in the Options menu: ticked, the flash drive
-	  appears as a removable disk on the machine at the other end of the
-	  USB cable and is refused here.  Works through the _UDR cookie
-	  (include/usbdrv.h).
+	  "Share card via USB" in the menu: ticked, the whole SD card --
+	  partition table and all -- appears as a removable disk on the
+	  machine at the other end of the USB cable, and every drive on it
+	  is refused here until it comes back.  Works through the _UDR
+	  cookie (include/usbdrv.h).
 
 config CONF_WITH_DESKTOP_SHORTCUTS
 	bool "Desktop shortcuts"

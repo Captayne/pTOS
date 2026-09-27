@@ -831,7 +831,8 @@ void fill_cookie_jar(void)
 
     /* the USB console, for programs that need it raw (_UCN) */
     rp2350_usbcon_add_cookie();
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
+    /* lending the card to the other machine (_UDR) */
     rp2350_usbmsc_add_cookie();
 #endif
 #endif

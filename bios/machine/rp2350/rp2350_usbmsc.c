@@ -1,5 +1,5 @@
 /*
- * rp2350_usbmsc.c - the flash drive as a USB disk, when a program shares it
+ * rp2350_usbmsc.c - the SD card as a USB disk, when a program shares it
  *
  * Copyright (C) 2026 The pTOS development team
  *
@@ -7,8 +7,16 @@
  * Please see LICENSE.TXT for further information.
  *
  * The device already offers a serial console on its one USB port; this
- * adds a second function beside it, a disk, so that F: can be opened in
- * a file manager on the other machine.
+ * adds a second function beside it, a disk, so that the SD card can be
+ * opened in a file manager on the other machine.
+ *
+ * The whole card, not one of its partitions: the other machine then sees
+ * the partition table too and mounts everything on it, which is what
+ * somebody who plugs a cable in wants.  It used to be the drive in the
+ * flash, which is gone -- and which was the wrong thing to share twice
+ * over, because writing it meant erasing flash from inside this file's
+ * interrupt handler, 23 milliseconds at a time with nothing else served.
+ * A card write is an SPI transfer and takes none of that.
  *
  * THE MEDIUM IS ABSENT UNTIL A PROGRAM SAYS OTHERWISE
  *
@@ -37,7 +45,8 @@
 #include "emutos.h"
 #include "rp2350.h"
 #include "rp2350_usb.h"
-#include "rp2350_flashdisk.h"
+#include "sd.h"
+#include "disk.h"
 #include "biosdefs.h"
 #include "disk.h"
 #include "gemerror.h"
@@ -46,7 +55,7 @@
 #include "cookie.h"
 #include "usbdrv.h"
 
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
 
 /* ==== the wrappers ===================================================== */
 
@@ -295,7 +304,7 @@ static void do_mode_sense(ULONG wanted)
 /* Read one sector into the staging buffer and start sending it. */
 static void read_next_sector(void)
 {
-    if (rp2350_flashdisk_usb_rw(0, (LONG)lba, 1, sector) != 0)
+    if (sd_rw(0, (LONG)lba, 1, sector, 0) != 0)
     {
         status = CSW_FAILED;
         sense_key = SENSE_NOT_READY;
@@ -469,7 +478,7 @@ void rp2350_usbmsc_out(void)
             /* A whole sector: commit it.  The write blocks interrupts
                for as long as the flash needs, which is why sharing is
                exclusive -- nothing else is expected to be running. */
-            if (rp2350_flashdisk_usb_rw(RW_WRITE, (LONG)lba, 1, sector) != 0)
+            if (sd_rw(RW_WRITE, (LONG)lba, 1, sector, 0) != 0)
             {
                 status = CSW_FAILED;
                 sense_key = SENSE_NOT_READY;
@@ -586,9 +595,23 @@ void rp2350_usbmsc_reset(void)
     ep3_receive();
 }
 
+/*
+ * How big the card is, asked of the card.  Not remembered from start-up:
+ * USB is configured before the disks are looked at, and a card put in
+ * later would be 0 sectors for good.
+ */
+static ULONG card_sectors(void)
+{
+    ULONG info[2];
+
+    if (sd_ioctl(0, GET_DISKINFO, info) != 0)
+        return 0;
+    return info[0];
+}
+
 void rp2350_usbmsc_init(void)
 {
-    capacity = (ULONG)rp2350_flashdisk_sectors();
+    capacity = card_sectors();
 
     EP_CTRL(EP3_IN_CTRL) = EP_CTRL_ENABLE | EP_CTRL_INT_PER_BUFF
                          | EP_CTRL_TYPE_BULK | EP3_IN_BUF;
@@ -610,18 +633,40 @@ LONG rp2350_usbmsc_share(WORD on)
 {
     LONG ret;
 
-    /* Asked now, not remembered from start-up: the cookie jar is filled
-       and USB configured before the flash drive is mounted, and a size
-       taken then would be 0 for good. */
-    capacity = (ULONG)rp2350_flashdisk_sectors();
+    /*
+     * Not while a program has the console.  That is a deploy in flight,
+     * and it is writing to a drive on this very card: handing the card
+     * over underneath it would pull the medium out from under GEMDOS's
+     * buffers.  The two are locked against each other at the resource
+     * rather than in the menus, so that no arrangement of clicks can get
+     * between them.
+     */
+    if (on && rp2350_usbcon_is_raw())
+        return EACCDN;
+
+    capacity = card_sectors();
     if (capacity == 0)
         return EUNDEV;
 
-    /* The drive changes hands: pTOS lets go, and reports the medium as
-       changed so that GEMDOS drops what it was holding. */
-    ret = rp2350_flashdisk_set_shared(on);
+    /* The card changes hands: pTOS lets go of every drive on it, and
+       reports the medium as changed so that GEMDOS drops what it was
+       holding.  See the SDMMC_BUS cases in disk.c. */
+    ret = disk_lend_sd(on);
     if (ret != E_OK)
         return ret;
+
+    /*
+     * Prove the card can still be read now that pTOS has let go of it --
+     * here, in the caller's own context.  Every later read comes out of
+     * the USB interrupt instead, so if this succeeds and the other
+     * machine still sees no medium, the difference is the context and
+     * not the card.
+     */
+    if (on && sd_rw(0, 0L, 1, sector, 0) != 0)
+    {
+        disk_lend_sd(0);
+        return EREADF;
+    }
 
     shared = on ? TRUE : FALSE;
     changed = TRUE;
@@ -649,7 +694,7 @@ static short udr_shared(void)
 
 static long udr_sectors(void)
 {
-    return rp2350_flashdisk_sectors();
+    return (long)card_sectors();
 }
 
 static const struct udr_api udr_api = {
@@ -668,4 +713,4 @@ void rp2350_usbmsc_add_cookie(void)
     cookie_add(UDR_COOKIE, (ULONG)&udr_api);
 }
 
-#endif /* CONF_WITH_RP2350_FLASHDISK */
+#endif /* CONF_WITH_RP2350_USBMSC */

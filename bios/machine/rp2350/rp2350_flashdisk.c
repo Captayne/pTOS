@@ -45,7 +45,14 @@
 
 /* the flash behind the real-time core image, 7 MB */
 #define FD_FLASH_OFFSET 0x00900000UL
-#define FD_FLASH_SIZE   0x00700000UL
+/*
+ * Two sectors short of the top: the last two belong to the settings
+ * store (rp2350_nvram.c), which is not a drive and must not be one of
+ * this layer's blocks.  It keeps them whether this drive exists or not,
+ * so the address stays what it is and nothing has to move -- moving the
+ * settings would mean losing them.
+ */
+#define FD_FLASH_SIZE   (0x00700000UL - 2 * 4096UL)
 #define FD_XIP_BASE     (0x10000000UL + FD_FLASH_OFFSET)
 
 #define BLOCK_SIZE      4096

@@ -136,4 +136,15 @@ void disk_rescan(UWORD unit);
 
 void disk_try_dmaboot(void);
 
+
+#if CONF_WITH_SDMMC && defined(MACHINE_RP2350)
+/*
+ * Lend the SD card to the other machine over USB, or take it back.  While
+ * it is lent every access to it is refused and it counts as changed, so
+ * that GEMDOS drops its buffers rather than writing them onto a medium
+ * somebody else is also writing.  See rp2350_usbmsc.c.
+ */
+LONG disk_lend_sd(WORD on);
+#endif
+
 #endif /* DISK_H */

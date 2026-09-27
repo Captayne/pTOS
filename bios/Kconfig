@@ -510,16 +510,82 @@ config CONF_WITH_RP2350_LCD
 	  screen becomes a 320x240 monochrome one, streamed to the display
 	  by PIO1 and DMA; the touch panel drives the mouse.
 
+config CONF_WITH_RP2350_USBMSC
+	bool "RP2350: lend the SD card to the other machine over USB"
+	depends on MACHINE_RP2350 && CONF_WITH_SDMMC
+	default y
+	help
+	  A second USB function beside the console: the whole card, with its
+	  partition table, so that a file manager on the other machine can
+	  open everything on it.  That is the cable this machine is already
+	  plugged into, doing something useful.
+
+	  Exclusive while it lasts.  Two file systems with their own caches
+	  on one medium corrupt it reliably, so pTOS lets go of every drive
+	  on the card and reports the medium as changed in both directions.
+	  It is also locked against a deploy in flight, which would be
+	  writing to a drive on that same card.
+
+config CONF_WITH_RP2350_FLASH
+	bool
+	depends on MACHINE_RP2350
+	default y if CONF_WITH_RP2350_FLASHDISK || CONF_WITH_RP2350_NVRAM
+	help
+	  Erasing and programming the QSPI flash through the bootrom
+	  (rp2350_flash.c).  Derived: whoever needs to write the flash turns
+	  this on by needing it.
+
+	  Every such write puts the QMI into direct mode, which takes *both*
+	  chip selects away -- the flash it is writing and the PSRAM beside
+	  it -- for about 23 milliseconds with interrupts masked.  That is
+	  measured, not estimated, and it is why what writes the flash and
+	  when is a question the system answers rather than a program.
+
+config CONF_WITH_RP2350_NVRAM
+	bool "RP2350: keep settings in the flash"
+	depends on MACHINE_RP2350
+	default y
+	help
+	  Two sectors at the top of the flash, written alternately, holding
+	  the settings the machine keeps when the power goes -- what a PC
+	  would call its BIOS settings.
+
+	  It is not a drive.  There is no drive letter, no file system and
+	  no call a program can make to reach it: the operating system reads
+	  it at boot and writes it when somebody changes something, and
+	  nothing else sees it at all.  That is the point.  A file system in
+	  the flash writes whenever it likes, and every write costs 23
+	  milliseconds in which neither QSPI chip select answers.
+
+	  Reading costs nothing: the record lies in the memory-mapped XIP
+	  window and is read like any other memory.
+
 config CONF_WITH_RP2350_FLASHDISK
 	bool "RP2350: a drive in the QSPI flash"
 	depends on MACHINE_RP2350
-	default y
+	default n
 	help
 	  4 MB of the 16 MB flash become a drive (F:), for programs and data
 	  that stay on the machine without an SD card.  A translation layer
 	  with wear levelling sits underneath, so that rewriting the same
 	  file system sectors does not wear out single flash blocks; 7 MB of
 	  flash are used for the 4 MB drive, the rest being spare capacity.
+
+	  Off by default, and the reason is worth reading before turning it
+	  back on.  A file system writes whenever it likes, and every write
+	  to this flash puts the QMI into direct mode, which takes *both*
+	  QSPI chip selects away -- the flash and the PSRAM beside it -- for
+	  about 23 milliseconds with interrupts masked.  Once the log fills
+	  up, which it does however little is stored on it because GEMDOS
+	  never says that a file was deleted, every single sector write
+	  first runs a garbage collection of several of those.
+
+	  The card on SPI1 has none of these properties, is two gigabytes
+	  rather than four megabytes, and is what a TOS machine would have
+	  had anyway: partitions on a mass storage device, not a drive
+	  inside the chip.  The flash keeps the image that boots, which is
+	  executed in place and only ever read, and the settings store
+	  (CONF_WITH_RP2350_NVRAM), which is not a drive at all.
 
 config CONF_WITH_RP2350_MONITOR
 	bool "RP2350 bring-up monitor (heartbeat NMI)"

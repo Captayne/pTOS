@@ -76,6 +76,9 @@ BOOL rp2350_usbmsc_request(UBYTE bmRequestType, UBYTE bRequest, UWORD wValue,
 /* What a program calls, through the cookie: hand the drive to the other
    machine, or take it back.  Exclusive either way. */
 LONG rp2350_usbmsc_share(WORD on);
+
+/* Whether a program has the console in raw mode (a deploy in flight). */
+BOOL rp2350_usbcon_is_raw(void);
 BOOL rp2350_usbmsc_shared(void);
 void rp2350_usbmsc_add_cookie(void);
 

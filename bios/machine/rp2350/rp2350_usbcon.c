@@ -151,7 +151,7 @@ static const UBYTE device_desc[18] = {
  * would drop the console the deploy terminal talks through.  Until it
  * is shared it simply answers "no medium", as a card reader does.
  */
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
 #define MSC_DESC_LEN    23
 #define NUM_INTERFACES  3
 #else
@@ -175,7 +175,7 @@ static const UBYTE config_desc[CONFIG_DESC_LEN] = {
     9, 4, 1, 0, 2, 0x0a, 0x00, 0x00, 0,
     7, 5, 0x02, 0x02, BULK_SIZE, 0, 0,  /* EP2 OUT, bulk */
     7, 5, 0x82, 0x02, BULK_SIZE, 0, 0   /* EP2 IN, bulk */
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
     ,
     /* interface 2: mass storage, SCSI over bulk-only transport */
     9, 4, 2, 0, 2, 0x08, 0x06, 0x50, 0,
@@ -391,12 +391,12 @@ static void set_configuration(UWORD value)
     tx_busy = FALSE;
     rx_arm();
 
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
     rp2350_usbmsc_init();
 #endif
 }
 
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
 /* The drive's endpoint is armed the same way as the console's: the
    buffer is written without BUF_AVAIL, and only released a dozen cycles
    later.  Releasing it in the same store loses packets. */
@@ -479,7 +479,7 @@ static void handle_setup(void)
     }
     else if ((type & 0x60) == 0x20) /* class request */
     {
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
         /* The drive's two requests first; everything else is the
            console's.  One branch for both -- a second branch with the
            same condition would never be reached, and the console would
@@ -639,7 +639,7 @@ static void usb_service(void)
             tx_busy = FALSE;
             tx_kick();
         }
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_USBMSC
         if (status & EP3_IN_BIT)
         {
             USB_REG(BUFF_STATUS) = EP3_IN_BIT;
@@ -726,9 +726,29 @@ void rp2350_usbcon_putc(UBYTE c)
 
 /* ==== _UCN cookie: the port for programs (include/usbcon.h) ============= */
 
+/*
+ * Has a program taken the port?  Asked by the disk sharing, which must
+ * not start while a deploy is in flight -- see rp2350_usbmsc_share().
+ */
+BOOL rp2350_usbcon_is_raw(void)
+{
+    return raw_mode;
+}
+
 static long ucn_set_raw(long on)
 {
     BOOL was = raw_mode;
+
+    /*
+     * Not while the card is at the other machine.  A program that takes
+     * the port is about to send files to a drive that GEMDOS cannot
+     * write just now, so it would transfer everything and fail at the
+     * end.  Better to say no at the start.
+     */
+#if CONF_WITH_RP2350_USBMSC
+    if (on && rp2350_usbmsc_shared())
+        return -1;
+#endif
 
     raw_mode = on ? TRUE : FALSE;
     if (!raw_mode)
