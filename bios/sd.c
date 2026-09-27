@@ -778,7 +778,20 @@ ULONG c_size;
         c_size = csd[7] & 0x3f;
         c_size = (c_size << 8) + csd[8];
         c_size = (c_size << 8) + csd[9];
-        return c_size * SDV2_CSIZE_MULTIPLIER;
+        /*
+         * "memory capacity = (C_SIZE + 1) * 512 KByte" -- the SD
+         * Physical Layer Specification for CSD version 2.0, which is
+         * every SDHC card.  The +1 used to be missing here, so every
+         * such card was reported 1024 sectors -- half a megabyte --
+         * smaller than it is.  The version 1 branch below has always
+         * had it.
+         *
+         * Half a megabyte sounds harmless and is not: a card whose last
+         * partition ends at its last byte then describes a partition
+         * that runs past the end of the disk, and a host asked to mount
+         * it decides the thing is inconsistent and declines.
+         */
+        return (c_size + 1) * SDV2_CSIZE_MULTIPLIER;
     }
 
     read_bl_len = csd[5] & 0x0f;
