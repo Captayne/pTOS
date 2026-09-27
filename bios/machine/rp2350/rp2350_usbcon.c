@@ -44,6 +44,7 @@
 #include "cookie.h"
 #include "usbcon.h"
 #include "rp2350_usb.h"
+#include "delay.h"
 
 /* Controller registers */
 #define USB_REGS            0x50110000UL
@@ -188,7 +189,21 @@ static const char *const strings[] = {
     NULL,                   /* 0: language list, built separately */
     "pTOS",
     "pTOS console (RP2350)",
-    "0001"
+    /*
+     * Twelve characters, and every one of them a hexadecimal digit.
+     *
+     * The Bulk-Only Transport specification requires exactly that of a
+     * mass storage device's serial number, and Windows enforces it: given
+     * anything else it discards the string and builds the device's
+     * instance identity out of the hub port instead, so the machine is
+     * "whatever is plugged into that socket" rather than itself.  This
+     * used to read "0001", which is four characters and was thrown away.
+     *
+     * It is the same for every board, which is wrong if two are attached
+     * to one host at once; the chip has a unique identifier that belongs
+     * here instead, and that is its own piece of work.
+     */
+    "000000000001"
 };
 
 /* Output ring, filled from the very first character */
@@ -846,6 +861,65 @@ void rp2350_usbcon_init(void)
     usb_up = TRUE;
 
     /* present ourselves to the host */
+    USB_REG_SET(SIE_CTRL) = SIE_CTRL_PULLUP_EN;
+}
+
+/*
+ * Let go of the bus and take hold of it again, so that the host throws
+ * away everything it believes about this device and asks afresh.
+ *
+ * WHY A DRIVE NEEDS THIS
+ *
+ * The mass storage interface is announced for as long as the machine is
+ * plugged in, because it shares its USB device with this console.  So the
+ * host enumerates the drive while the card still belongs to pTOS and is
+ * told there is no medium -- and that is the moment a host reads a disk's
+ * partition table.  Afterwards it may poll for a medium, or it may not,
+ * and whether it looks again is its business and differs between systems.
+ * Measured on Windows 10: the partitions are found, no volume is ever
+ * built from them, and nothing is logged.
+ *
+ * Releasing the pull-up is the same event as pulling the cable out.  The
+ * host tears the whole stack down, sees the device appear again, and
+ * enumerates a drive that has its medium from the first command -- which
+ * is the ordinary case of plugging in a card reader with a card in it,
+ * and the path every host handles well.
+ *
+ * THE CONSOLE GOES WITH IT
+ *
+ * One device, one pull-up: the serial console disappears for as long as
+ * this takes and comes back on the same port.  Anything the console was
+ * about to say is lost, and a terminal holding the port will notice.  The
+ * caller owes the user that warning.
+ */
+void rp2350_usbcon_reattach(void)
+{
+    ULONG i;
+
+    if (!usb_up)
+        return;
+
+    USB_REG_CLR(SIE_CTRL) = SIE_CTRL_PULLUP_EN;
+
+    /*
+     * The host has to see the line idle long enough to call it a
+     * disconnect rather than noise.  The specification asks for 2.5
+     * microseconds; hubs debounce for far longer and Windows wants to
+     * finish tearing down the stack, so this is 100 milliseconds --
+     * unnoticeable to a person and unambiguous to a host.
+     */
+    for (i = 0; i < 100; i++)
+        delay_loop(loopcount_1_msec);
+
+    /* Come back as a device that has never been asked anything. */
+    USB_REG(ADDR_ENDP) = 0;
+    configured = FALSE;
+    dtr = FALSE;
+    rx_waiting = FALSE;
+    tx_busy = FALSE;
+    set_addr_pending = FALSE;
+    ep0_tx_ptr = NULL;
+
     USB_REG_SET(SIE_CTRL) = SIE_CTRL_PULLUP_EN;
 }
 

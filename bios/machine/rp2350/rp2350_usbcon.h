@@ -17,6 +17,14 @@
 void rp2350_usbcon_init(void);
 void rp2350_usbcon_attach_irq(void);
 void rp2350_usbcon_poll(void);
+
+/*
+ * Drop off the bus and come back, so the host forgets this device and
+ * enumerates it again.  For a drive whose medium has just appeared: see
+ * the comment on the definition.  Takes about a tenth of a second, in
+ * which the console is gone.  Not for an interrupt handler.
+ */
+void rp2350_usbcon_reattach(void);
 void rp2350_usbcon_add_cookie(void);
 void rp2350_usbcon_timer(void);
 void armv8m_halt_hook(void);
