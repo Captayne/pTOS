@@ -30,6 +30,9 @@
 #include "vt52.h"
 #include "processor.h"
 #include "initinfo.h"
+#if CONF_WITH_RP2350_NVRAM
+#include "rp2350_nvram.h"
+#endif
 #include "machine.h"
 #include "has.h"
 #include "cookie.h"
@@ -442,6 +445,11 @@ static void bios_init(void)
             panic("setup_68040_pmmu() failed\n");
     }
 #endif /* CONF_WITH_68040_PMMU */
+
+#if CONF_WITH_RP2350_NVRAM
+    /* before anything asks what the machine was told to believe */
+    rp2350_nvram_init();
+#endif
 
     KDEBUG(("cookie_init()\n"));
     cookie_init();      /* sets a cookie jar */

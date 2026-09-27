@@ -40,6 +40,9 @@
 #if CONF_WITH_RP2350_PSRAM
 #include "rp2350.h"
 #endif
+#if CONF_WITH_RP2350_NVRAM
+#include "rp2350_nvram.h"
+#endif
 
 #include "initinfo.h"
 #include "conout.h"
@@ -330,6 +333,9 @@ WORD initinfo(ULONG *pshiftbits)
     if (!rp2350_psram_size)
         initinfo_height += 2;   /* what the probe saw instead, below */
 #endif
+#if CONF_WITH_RP2350_NVRAM
+    initinfo_height += 1;
+#endif
     if (hdd_available)
         initinfo_height += 1;
 
@@ -410,6 +416,21 @@ WORD initinfo(ULONG *pshiftbits)
 
     cprintf("\033j");       /* save current cursor position */
     cprint_devices(dev);
+
+#if CONF_WITH_RP2350_NVRAM
+    /*
+     * Where the kept settings came from.  A machine that has never been
+     * told anything and one whose store has gone bad both run on
+     * defaults; this says which, without needing a console.
+     */
+    pair_start("Settings");
+    if (rp2350_nvram_slot() < 0)
+        cprintf("defaults");
+    else
+        cprintf("slot %c, saved %lu", rp2350_nvram_slot() ? 'B' : 'A',
+                rp2350_nvram_sequence());
+    pair_end();
+#endif
 
     pair_start(_("Boot time")); cprint_asctime(); pair_end();
 

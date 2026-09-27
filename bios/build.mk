@@ -56,14 +56,19 @@ obj-$(CONF_WITH_RASPI_VSYNC_IRQ) += raspi_vsync.o
 obj-$(MACHINE_VIRT_ARM) += virt_uart.o virt_mmu.o virt_pic.o virt_timer.o
 
 obj-$(MACHINE_RP2350) += rp2350_board.o rp2350_int.o rp2350_uart.o rp2350_usbcon.o
-obj-$(MACHINE_RP2350) += rp2350_usbmsc.o rp2350_sched.o
+obj-$(MACHINE_RP2350) += rp2350_sched.o
+obj-$(CONF_WITH_RP2350_USBMSC) += rp2350_usbmsc.o
 obj-$(CONF_WITH_WIFI_SETTINGS) += wifisettings.o
 obj-$(CONF_WITH_RP2350_UART1) += rp2350_uart1.o
 obj-$(CONF_WITH_RP2350_MONITOR) += rp2350_monitor.o
 obj-$(CONF_WITH_RP2350_SPI) += rp2350_spi.o
 obj-$(CONF_WITH_RP2350_RTX) += rp2350_rtx.o
 obj-$(CONF_WITH_RP2350_LCD) += rp2350_lcd.o
-obj-$(CONF_WITH_RP2350_FLASHDISK) += rp2350_flash.o rp2350_flashdisk.o
+# The flash primitives are not the drive's alone any more: the settings
+# store uses them too, and outlives it.
+obj-$(CONF_WITH_RP2350_FLASH) += rp2350_flash.o
+obj-$(CONF_WITH_RP2350_FLASHDISK) += rp2350_flashdisk.o
+obj-$(CONF_WITH_RP2350_NVRAM) += rp2350_nvram.o
 
 # ARMv8-M replacements for what the A-profile code does with CPSR modes.
 obj-$(ARCH_ARMV8M) += super.o earlyfault.o

@@ -26,7 +26,7 @@
 #include "asm.h"
 #include "rp2350_int.h"
 
-#if CONF_WITH_RP2350_FLASHDISK
+#if CONF_WITH_RP2350_FLASH
 
 /* bootrom lookup: the halfword at 0x16 points to rom_table_lookup() */
 #define ROM_TABLE_LOOKUP_ADDR   0x16UL
@@ -188,4 +188,4 @@ void rp2350_flash_program(ULONG offs, const UBYTE *data, ULONG count)
         run_flash_op(offs, data, count, FALSE);
 }
 
-#endif /* CONF_WITH_RP2350_FLASHDISK */
+#endif /* CONF_WITH_RP2350_FLASH */
