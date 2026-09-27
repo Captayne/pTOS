@@ -35,12 +35,14 @@ config CONF_WITH_TOUCH_CALIBRATION
 	  the desktop starts.  Works through the _TCH cookie (include/touch.h).
 
 config CONF_WITH_WIFI_SETTINGS
-	bool "Wireless network settings in the Options menu"
+	bool "Connecty: connection settings in the Options menu"
 	default y
 	help
-	  "Wifi settings..." in the Options menu asks for the name of a
-	  wireless network and its key, kept by the BIOS and written to
-	  EMUDESK.INF by "Save desktop".  The machine has no radio itself;
+	  "Connecty..." in the Options menu asks for the name of a wireless
+	  network, its key and the hours from UTC, kept by the BIOS and
+	  written to EMUDESK.INF by "Save desktop".  It is the one place for
+	  settings about reaching the world, so that a second radio does not
+	  need a second menu entry.  The machine has no radio itself;
 	  a program drives a module on a serial line and asks here instead
 	  of asking the user again (the _WIF cookie, include/wifi.h).
 	  The key is kept in plain text.

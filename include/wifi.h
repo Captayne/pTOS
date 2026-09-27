@@ -19,9 +19,10 @@
  *
  * The machine has no radio of its own: a module on a serial line has it,
  * and a program talks to that module.  What the machine does keep is the
- * name of the network and its key, entered once under "Wifi settings..."
- * in the desktop's Options menu and saved with "Save desktop".  Every
- * program asks here instead of asking the user again.
+ * name of the network, its key and the hours from UTC, entered once
+ * under "Connecty..." in the desktop's Options menu and saved with
+ * "Save desktop".  Every program asks here instead of asking the user
+ * again.
  *
  * A program finds this through the cookie "_WIF":
  *

@@ -1,10 +1,15 @@
 /*
- * deskwifi.c - "Wifi settings..." in the desktop's Options menu
+ * deskwifi.c - "Connecty..." in the desktop's Options menu
  *
  * Copyright (C) 2026 The pTOS development team
  *
  * This file is distributed under the GPL, version 2 or at your
  * option any later version.  See doc/license.txt for details.
+ *
+ * Connecty is where the machine is told how to reach the world --
+ * today the wireless network, its key and the hours from UTC, and
+ * whatever else earns a place there later.  Hence the name, and
+ * hence one entry rather than one per radio.
  *
  * The machine has no radio: a module on a serial line has one, and a
  * program drives it.  What the machine keeps is the name of the network

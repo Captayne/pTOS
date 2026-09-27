@@ -1,5 +1,5 @@
 /*
- * deskwifi.h - "Wifi settings..." in the desktop
+ * deskwifi.h - "Connecty..." in the desktop
  *
  * Copyright (C) 2026 The pTOS development team
  *
