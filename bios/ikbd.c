@@ -221,10 +221,179 @@ static ULONG ikbdiorec_from_ascii(UBYTE ascii)
     return value;
 }
 
+/*
+ * ==== the keys that have no character ==================================
+ *
+ * The tables above are indexed by scancode and hold the character each
+ * key produces.  The arrows, Home, Insert, the function keys hold a zero
+ * there: they have a scancode and no character at all.  Since
+ * scancode_from_ascii() searches the other way round, from character to
+ * scancode, no single byte can ever arrive as one of them.  That is not
+ * a gap in the tables; the road only runs one way.
+ *
+ * So they arrive the way a terminal sends them, as escape sequences, and
+ * are taken apart here before the character path ever sees them:
+ *
+ *      ESC [ A B C D       up, down, right, left
+ *      ESC [ H             Clr/Home
+ *      ESC [ n ~           2 insert, 3 delete, 5 page up, 6 page down,
+ *                          15..24 F5..F12
+ *      ESC O P Q R S       F1..F4
+ *      ESC [ 1 ; m A       any of the above with modifiers, m-1 being a
+ *                          bit each for shift, alt and control
+ *
+ * THERE IS NO ESCAPE KEY, AND THAT IS WHY THERE IS NO TIMER
+ *
+ * A bare Escape and the start of a sequence are the same byte, and the
+ * only way to tell them apart is to wait -- which needs a clock, a
+ * timeout, and a rule for what happens to a half-finished sequence when
+ * it expires.  Dropping the Escape key removes all of that: ESC always
+ * begins a sequence, and nothing is ever left pending.
+ *
+ * ESC ESC sends a real Escape, for the dialogue that wants one.
+ */
+
+#define ESC_NONE    0       /* ordinary characters */
+#define ESC_SEEN    1       /* had ESC, waiting for [ or O */
+#define ESC_CSI     2       /* had ESC [, collecting digits */
+#define ESC_SS3     3       /* had ESC O, one letter follows */
+
+static UBYTE esc_state;
+static UWORD esc_num;       /* the digits before ~ or ; */
+static UWORD esc_mod;       /* the digits after ; */
+static BOOL  esc_semi;      /* digits are going into esc_mod */
+
+/* Atari scancodes for the keys a terminal names with a letter */
+static UBYTE csi_letter(UBYTE c)
+{
+    switch (c)
+    {
+    case 'A': return 0x48;      /* up */
+    case 'B': return 0x50;      /* down */
+    case 'C': return 0x4d;      /* right */
+    case 'D': return 0x4b;      /* left */
+    case 'H': return 0x47;      /* Clr/Home */
+    case 'F': return 0x4f;      /* end, which the Atari has on keypad 1 */
+    case 'P': return 0x3b;      /* F1, after ESC O */
+    case 'Q': return 0x3c;      /* F2 */
+    case 'R': return 0x3d;      /* F3 */
+    case 'S': return 0x3e;      /* F4 */
+    }
+    return 0;
+}
+
+/* ...and for the ones it names with a number before a tilde */
+static UBYTE csi_number(UWORD n)
+{
+    switch (n)
+    {
+    case 1: return 0x47;        /* Home */
+    case 2: return 0x52;        /* Insert */
+    case 3: return 0x53;        /* Delete */
+    case 4: return 0x4f;        /* End */
+    case 5: return 0x49;        /* page up, the Atari's keypad 9 */
+    case 6: return 0x51;        /* page down, keypad 3 */
+    case 15: return 0x3f;       /* F5 */
+    case 17: return 0x40;       /* F6 */
+    case 18: return 0x41;       /* F7 */
+    case 19: return 0x42;       /* F8 */
+    case 20: return 0x43;       /* F9 */
+    case 21: return 0x44;       /* F10 */
+    }
+    return 0;
+}
+
+/*
+ * The modifier parameter is one more than a bit field: 2 is shift, 3 is
+ * alt, 5 is control, and the combinations add up in between.
+ */
+static UBYTE csi_mode(UWORD m)
+{
+    UBYTE mode = 0;
+
+    if (m < 2)
+        return 0;
+    m -= 1;
+    if (m & 1)
+        mode |= MODE_LSHIFT;
+    if (m & 2)
+        mode |= MODE_ALT;
+    if (m & 4)
+        mode |= MODE_CTRL;
+
+    return mode;
+}
+
+/* A key with a scancode and no character of its own. */
+static void push_scancode(UBYTE scancode, UBYTE mode)
+{
+    if (scancode)
+        push_ikbdiorec(MAKE_ULONG(scancode, 0) | ((ULONG)mode << 24));
+}
+
 /* Emulate a key press from an ASCII character */
 void push_ascii_ikbdiorec(UBYTE ascii)
 {
     ULONG value;
+
+    switch (esc_state)
+    {
+    case ESC_SEEN:
+        if (ascii == '[')
+        {
+            esc_state = ESC_CSI;
+            esc_num = esc_mod = 0;
+            esc_semi = FALSE;
+            return;
+        }
+        if (ascii == 'O')
+        {
+            esc_state = ESC_SS3;
+            return;
+        }
+        /*
+         * ESC ESC is the Escape key, and falls through to the character
+         * path where 0x1b finds scancode 0x01 in the tables. Anything
+         * else was never a sequence, so it goes through as the character
+         * it is -- the ESC in front of it is dropped, which is the price
+         * of having no timer to decide otherwise.
+         */
+        esc_state = ESC_NONE;
+        break;
+
+    case ESC_CSI:
+        if (ascii >= '0' && ascii <= '9')
+        {
+            UWORD *p = esc_semi ? &esc_mod : &esc_num;
+
+            *p = (UWORD)(*p * 10 + (ascii - '0'));
+            return;
+        }
+        if (ascii == ';')
+        {
+            esc_semi = TRUE;
+            return;
+        }
+        esc_state = ESC_NONE;
+        if (ascii == '~')
+            push_scancode(csi_number(esc_num), csi_mode(esc_mod));
+        else
+            push_scancode(csi_letter(ascii), csi_mode(esc_mod));
+        return;
+
+    case ESC_SS3:
+        esc_state = ESC_NONE;
+        push_scancode(csi_letter(ascii), 0);
+        return;
+
+    default:
+        if (ascii == 0x1b)
+        {
+            esc_state = ESC_SEEN;
+            return;
+        }
+        break;
+    }
 
     value = ikbdiorec_from_ascii(ascii);
     push_ikbdiorec(value);
