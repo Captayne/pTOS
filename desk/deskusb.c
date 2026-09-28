@@ -63,44 +63,16 @@ void usbdrive_toggle(void)
     if (udr->shared())
     {
         /*
-         * Take it back, and say something only if something went wrong.
+         * Take the card back, and say nothing.
          *
-         * Making this work took a long evening of not knowing which end
-         * was at fault -- the card, the transport, or the other machine's
-         * idea of what we are -- and the counters that finally settled it
-         * earned their keep.  They are not worth four dialogs on the way
-         * out of a handover that went fine, though, so they stay
-         * available to any program through the cookie (include/usbdrv.h,
-         * struct udr_stats) and what surfaces here is only what a person
-         * has to be told: that the other machine never came for the card,
-         * or that the card refused it something.  A quiet unshare means
-         * it went well.
+         * Getting this to work took a long evening of not knowing which
+         * end was at fault, and the counters that settled it are still
+         * there -- struct udr_stats, through the _UDR cookie
+         * (include/usbdrv.h).  A program that wants to look can.  But
+         * handing the card back is an ordinary thing to do, and an
+         * ordinary thing that worked should not interrupt anybody.
          */
-        struct udr_stats st;
-        char msg[160];
-
-        memset(&st, 0, sizeof(st));
-        if (udr->version >= 2)
-            udr->stats(&st, sizeof(st));
         udr->share(0);
-
-        msg[0] = '\0';
-        if (udr->version < 2)
-            ;                       /* it cannot tell us anything */
-        else if (st.commands == 0)
-            strcpy(msg, "[1][The other machine never asked|"
-                        "for the card.][ OK ]");
-        else if (st.reads == 0)
-            sprintf(msg, "[1][The other machine asked %lu times|"
-                         "but never read a sector.][ OK ]", st.commands);
-        else if (st.failed != 0)
-            sprintf(msg, "[1][The card refused %lu of the %lu|"
-                         "sectors it was asked for.|"
-                         "The last error was %ld.][ OK ]",
-                    st.failed, st.reads, st.last_error);
-
-        if (msg[0])
-            form_alert(1, msg);
         return;
     }
 

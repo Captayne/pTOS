@@ -432,14 +432,28 @@ LONG elf_pgmhdrld(FH h, PGMHDR01 *hd)
     hd->h01_slen = 0;
     hd->h01_res1 = 0;
     /*
-     * main RAM (no PF_TTRAMLOAD/PF_TTRAMMEM), and PF_FASTLOAD: elf_pgmld()
-     * only clears the program's own footprint (info.mem_end -
-     * info.link_base), not the whole TPA proc.c may have granted beyond
-     * it -- see the bzero() call there. That is exactly what PF_FASTLOAD
-     * documents for the PRG loader (kpgmld.c's pgmld01()), so this keeps
-     * the two loaders' declared and actual behavior consistent.
+     * PF_FASTLOAD, because elf_pgmld() only clears the program's own
+     * footprint (info.mem_end - info.link_base), not the whole TPA proc.c
+     * may have granted beyond it -- see the bzero() call there. That is
+     * exactly what PF_FASTLOAD documents for the PRG loader (kpgmld.c's
+     * pgmld01()), so this keeps the two loaders' declared and actual
+     * behaviour consistent.
+     *
+     * PF_TTRAMLOAD and PF_TTRAMMEM, because a machine with Alt-RAM is the
+     * ordinary case here rather than the exception. This used to ask for
+     * main RAM only, which on a board with 130 KB of internal SRAM and
+     * 16 MB of PSRAM meant every program was capped at the smaller number
+     * while the larger one sat unused: a 500 KB program was refused with
+     * "not enough memory" on a machine with fifteen megabytes free.
+     *
+     * proc.c decides from there (see its CONF_WITH_ALT_RAM block): with
+     * both kinds available it still prefers ST RAM when that is the
+     * larger, so a small program is not pushed into the slower memory for
+     * no reason. Alt-RAM is reached over the QSPI bus and a program
+     * running from it is slower than one in internal RAM; what this flag
+     * changes is that the choice exists at all.
      */
-    hd->h01_flags = PF_FASTLOAD;
+    hd->h01_flags = PF_FASTLOAD | PF_TTRAMLOAD | PF_TTRAMMEM;
     hd->h01_abs = 0;
 
     return 0;

@@ -4,6 +4,13 @@
 # docs/superpowers/plans/2026-09-18-rp2350-port.md.
 MACHINE_RP2350=y
 
+# AES 3.40, rather than the 1.40 of TOS 1.04 that everything else
+# defaults to.  In the whole tree this changes exactly two things:
+# wind_get() gains WF_OWNER (aes/gemwmlib.c compiles it out below 0x330),
+# and NUM_WIN goes from 8 to 16.  Programs that ask for the window owner
+# get FALSE otherwise, which they read as "no such window".
+AES_VERSION=0x0340
+
 # The multi-language image supports every country at run time.  It costs
 # flash, not RAM, and there are 16 MB of flash.
 # BUILD_UNIQUE_COUNTRY is not set
