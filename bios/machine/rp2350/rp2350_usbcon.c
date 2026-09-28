@@ -226,6 +226,7 @@ static volatile BOOL configured;
 static volatile BOOL dtr;           /* a terminal has the port open */
 static volatile BOOL tx_busy;
 volatile BOOL rp2350_usbcon_break;  /* the host sent a break (monitor) */
+volatile BOOL rp2350_usbcon_shot;   /* ...or asked for a screenshot */
 static BOOL in_poll;
 static volatile BOOL raw_mode;      /* a program reads the port itself */
 
@@ -336,6 +337,19 @@ static UWORD build_string_desc(int index)
  * own reboot() (RP2350 datasheet, 5.4 "Bootrom APIs"): the 16-bit pointer
  * at 0x16 is rom_table_lookup(code, mask).
  */
+/*
+ * A second magic baud rate, next to the one that reboots into BOOTSEL:
+ * setting the port to 1201 asks for a colour screenshot.
+ *
+ * Out of band on purpose. The console is the machine's keyboard, so
+ * anything sent as data would have to be a byte sequence nobody could
+ * ever type, and would still be typed by accident one day. The line
+ * coding is a control request: it reaches the device without passing
+ * through the keyboard at all, it works whatever the console is doing,
+ * and pico-sdk established the convention here already.
+ */
+#define BAUD_SCREENSHOT             1201
+
 #define BAUD_BOOTSEL                1200
 #define ROM_FUNC_REBOOT             ('R' | ('B' << 8))
 #define RT_FLAG_FUNC_ARM_SEC        0x0004
@@ -555,6 +569,41 @@ static BOOL rx_room(void)
 #endif
 }
 
+#if CONF_SERIAL_CONSOLE
+/*
+ * Handing the port over without anybody having to ask.
+ *
+ * The console is a keyboard and a file transfer wants it whole, and on a
+ * machine whose only keyboard IS this port, a program that takes it and
+ * keeps it leaves the machine with no way to type.  That is what used to
+ * happen: the deploy accessory switched raw mode on at start-up and never
+ * switched it off, so after the first upload the keyboard was dead until
+ * somebody found the menu entry that toggles it.
+ *
+ * Every transfer opens with the same five bytes, so the console can watch
+ * for them itself.  While they are arriving they are held back rather
+ * than typed; when the fifth one lands, raw mode goes on and all five go
+ * into the ring, so the program's own matcher sees the header it expects
+ * and needs no changes.  If the run breaks off, what was held back is
+ * typed after all and nothing is lost.
+ *
+ * Switching back is still the program's job -- the console cannot know
+ * when a transfer has ended, only when one has begun.
+ */
+static const char handover[] = "PTUP1";
+static UBYTE handover_pos;
+
+static void ring_put(UBYTE c)
+{
+    UWORD head = (rx_head + 1) % RX_RING_SIZE;
+
+    if (head == rx_tail)
+        return;                     /* full: the header is lost anyway */
+    rx_ring[rx_head] = c;
+    rx_head = head;
+}
+#endif
+
 static void rx_drain(void)
 {
     volatile UBYTE *buf = DPRAM_PTR(EP2_OUT_BUF);
@@ -565,6 +614,31 @@ static void rx_drain(void)
 #if CONF_SERIAL_CONSOLE
         if (!raw_mode)
         {
+            UBYTE i;
+
+            if (c == (UBYTE)handover[handover_pos])
+            {
+                if (handover[++handover_pos] != '\0')
+                    continue;       /* still in the middle of it */
+
+                handover_pos = 0;
+                raw_mode = TRUE;
+                for (i = 0; handover[i]; i++)
+                    ring_put((UBYTE)handover[i]);
+                continue;
+            }
+
+            /* not a header after all: type what was held back */
+            for (i = 0; i < handover_pos; i++)
+                push_ascii_ikbdiorec((UBYTE)handover[i]);
+            handover_pos = 0;
+
+            if (c == (UBYTE)handover[0])
+            {
+                handover_pos = 1;   /* this byte may start the next one */
+                continue;
+            }
+
             push_ascii_ikbdiorec(c);
             continue;
         }
@@ -643,9 +717,16 @@ static void usb_service(void)
                     line_coding[i] = buf[i];
                 line_coding_pending = FALSE;
                 ep0_send_zlp();
-                if ((line_coding[0] | (line_coding[1] << 8) | ((ULONG)line_coding[2] << 16)
-                     | ((ULONG)line_coding[3] << 24)) == BAUD_BOOTSEL)
-                    reboot_to_bootsel();
+                {
+                    ULONG baud = line_coding[0] | (line_coding[1] << 8)
+                               | ((ULONG)line_coding[2] << 16)
+                               | ((ULONG)line_coding[3] << 24);
+
+                    if (baud == BAUD_BOOTSEL)
+                        reboot_to_bootsel();
+                    else if (baud == BAUD_SCREENSHOT)
+                        rp2350_usbcon_shot = TRUE;
+                }
             }
         }
         if (status & EP2_IN_BIT)
@@ -767,7 +848,12 @@ static long ucn_set_raw(long on)
 
     raw_mode = on ? TRUE : FALSE;
     if (!raw_mode)
+    {
         rx_tail = rx_head;          /* drop what nobody asked for */
+#if CONF_SERIAL_CONSOLE
+        handover_pos = 0;           /* and start listening for a header */
+#endif
+    }
     rp2350_usbcon_timer();          /* the host may continue */
     return was;
 }

@@ -30,6 +30,7 @@ void rp2350_usbcon_timer(void);
 void armv8m_halt_hook(void);
 void rp2350_usbcon_putc(UBYTE c);
 extern volatile BOOL rp2350_usbcon_break;
+extern volatile BOOL rp2350_usbcon_shot;
 BOOL rp2350_usbcon_can_read(void);
 UBYTE rp2350_usbcon_getc(void);
 
