@@ -760,11 +760,20 @@ void rp2350_lcd_init(void)
     lcd_cmd0(0x11);                     /* sleep out */
     ms(120);
     lcd_cmd1(0x3a, 0x55);               /* 16 bits per pixel */
-    /* Landscape (MV).  Bit 3 would tell the controller to read the high
-     * five bits of a pixel as blue instead of red; the framebuffer holds
-     * R5G6B5, so it stays clear.  If red and blue come out exchanged on a
-     * panel whose glass is wired the other way round, this is the bit. */
-    lcd_cmd1(0x36, 0x20);
+    /*
+     * Landscape (MV), and bit 3 set: the controller reads the high five
+     * bits of a pixel as blue rather than red.
+     *
+     * That looks backwards next to a framebuffer that holds R5G6B5, and
+     * it is -- this panel's glass is wired the other way round, which the
+     * bit is there to compensate for. It was clear, and red and blue came
+     * out exchanged: the desktop background sits in the framebuffer as
+     * 0xf800, which is palette entry 1, which is 0x000000ff in the
+     * 0x00BBGGRR form vdi_backend_truecolor.c stores, which is red. It
+     * showed blue. Everything from the palette entry to the bit pattern
+     * agreed; only the glass did not.
+     */
+    lcd_cmd1(0x36, 0x28);
     lcd_cmd4(0x2a, 0, 0, (WIDTH - 1) >> 8, (WIDTH - 1) & 0xff);   /* columns */
     lcd_cmd4(0x2b, 0, 0, (HEIGHT - 1) >> 8, (HEIGHT - 1) & 0xff); /* pages */
     lcd_cmd0(0x29);                     /* display on */
