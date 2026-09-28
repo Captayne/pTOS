@@ -242,16 +242,37 @@ not_svc:
         it      eq
         moveq   r0, #0x20
 
-        ldr     r2, =SCB_CFSR
-        ldr     r2, [r2]                // fsr: CFSR
+        ldr     r1, =SCB_CFSR
+        ldr     r2, [r1]                // fsr: CFSR
         cbnz    r2, 1f
-        ldr     r2, =SCB_HFSR
-        ldr     r2, [r2]                // ...or HFSR when CFSR is empty
+        ldr     r1, =SCB_HFSR
+        ldr     r2, [r1]                // ...or HFSR when CFSR is empty
 1:      ldr     r3, =SCB_BFAR
         tst     r2, #0x8000             // BFARVALID
         it      eq
         ldreq   r3, =SCB_MMFAR
         ldr     r3, [r3]                // far
+
+        /*
+         * Clear the status bits, now that both the cause and the address
+         * have been read out of them.
+         *
+         * CFSR, HFSR and the BFARVALID flag are all write-1-to-clear, and
+         * nothing else in pTOS clears them.  Left alone they accumulate,
+         * so a second fault is reported with the first one's cause and the
+         * first one's address -- which reads as a perfectly plausible
+         * report and sends you looking in the wrong place.  The tell is
+         * two reports whose fsr and far agree to the bit while their pc
+         * does not, and a pc that lands on an instruction incapable of
+         * the fault being described.
+         *
+         * r1 still points at whichever register r2 came from, and writing
+         * the value back clears exactly the bits that were set.
+         */
+        str     r2, [r1]
+        ldr     r1, =SCB_HFSR
+        mov     r12, #0x40000000        // HFSR.FORCED, set on escalation
+        str     r12, [r1]
 
         mov     r1, sp
         // Report the raw registers first, with nothing but the machine's
