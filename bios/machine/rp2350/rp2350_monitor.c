@@ -59,10 +59,40 @@ static void mon_puthex(ULONG v)
 
 #if CONF_WITH_RP2350_LCD
 /*
- * The screen as a picture on the console: one character per 2x2 block of
- * RGB565 pixels, darkest to lightest.  A hex dump of the framebuffer was
- * readable while it held one bit per pixel; 153600 bytes of it are not,
- * and what this is for is seeing whether there is an image at all.
+ * The screen in colour, for documentation rather than debugging.
+ *
+ * The ramp above is meant to be read in a log; this is meant to become a
+ * PNG on the other machine, so it goes over as it is: RGB565, low byte
+ * first, 320 * 240 * 2 = 153600 bytes, with one ASCII line in front to
+ * find it by and nothing behind it. At the 374 KB/s this port actually
+ * manages, that is four tenths of a second.
+ *
+ * Raw bytes in what is otherwise a text stream are safe here because the
+ * console is a byte pipe in both directions -- nothing in it interprets
+ * output. A terminal that happens to be watching will print rubbish for
+ * a moment; tools/gemshot.py knows the header and reads exactly the
+ * 153600 bytes that follow it.
+ */
+static void mon_dump_fb_raw(void)
+{
+    const UBYTE *p = (const UBYTE *)v_bas_ad;
+    ULONG n = 320UL * 240UL * 2;
+    ULONG i;
+
+    mon_puts("\r\n[fb565 320 240]\r\n");
+    for (i = 0; i < n; i++)
+        rp2350_usbcon_putc(p[i]);
+}
+
+/*
+ * And the same screen as a picture in the log: one character per pixel,
+ * darkest to lightest.
+ *
+ * It used to sample 2x2 blocks, which made the dump a quarter of the size
+ * and useless for the one thing it is good at. The system font is eight
+ * pixels tall, so a line of text came out four characters high and every
+ * line looked as though it overlapped the next. Telling a real layout
+ * fault from the sampling cost more time than the larger dump ever will.
  */
 static void mon_dump_fb(void)
 {
@@ -70,18 +100,16 @@ static void mon_dump_fb(void)
     const UWORD *fb = (const UWORD *)v_bas_ad;
     int x, y;
 
-    for (y = 0; y < 240; y += 2)
+    for (y = 0; y < 240; y++)
     {
         mon_puts("[fb]");
-        for (x = 0; x < 320; x += 2)
+        for (x = 0; x < 320; x++)
         {
-            const UWORD *p = fb + (ULONG)y * 320 + x;
             /* green carries most of the brightness and is the widest
              * field, so it stands in for luminance */
-            UWORD sum = ((p[0] >> 5) & 0x3f) + ((p[1] >> 5) & 0x3f)
-                      + ((p[320] >> 5) & 0x3f) + ((p[321] >> 5) & 0x3f);
+            UWORD g = (fb[(ULONG)y * 320 + x] >> 5) & 0x3f;
 
-            rp2350_usbcon_putc((UBYTE)ramp[sum * 9 / (4 * 0x3f)]);
+            rp2350_usbcon_putc((UBYTE)ramp[g * 9 / 0x3f]);
         }
         mon_puts("\r\n");
     }
@@ -131,6 +159,19 @@ void rp2350_monitor_nmi(ULONG *frame)
         else
             stuck_ticks = 0;
     }
+
+#if CONF_WITH_RP2350_LCD
+    /*
+     * A screenshot on its own, with no register report in front of it:
+     * this one is asked for by somebody who wants the picture, not by
+     * somebody looking for a fault.
+     */
+    if (rp2350_usbcon_shot)
+    {
+        rp2350_usbcon_shot = FALSE;
+        mon_dump_fb_raw();
+    }
+#endif
 
     if ((stuck_ticks && stuck_ticks % REPORT_EVERY == 0) || rp2350_usbcon_break)
     {
