@@ -267,6 +267,25 @@ WORD pn_active(PNODE *pn, BOOL include_folders)
 #endif
         if (G.g_wdta.d_fname[0] == '.') /* skip "." & ".." entries */
             continue;
+        /*
+         * Start from nothing. p_fbase above comes from
+         * dos_alloc_anyram(), which hands back memory as it found it, and
+         * the memcpy below fills only the part that mirrors the DTA --
+         * f_attr through f_name[]. f_selected, f_obid, f_pa and f_isap
+         * were left holding whatever had been there before.
+         *
+         * f_selected is why a freshly opened window showed a file or two
+         * already marked, with the mouse nowhere near them: the flag was
+         * never set by anybody, it was simply what the last owner of
+         * those bytes had written. f_obid is worse and had not shown
+         * itself yet -- fun_sall() uses it to index G.g_screen[], so a
+         * stale value writes a SELECTED bit at an arbitrary address.
+         *
+         * NIL rather than zero for f_obid, because zero is a real object.
+         */
+        memset(fn, 0, sizeof(FNODE));
+        fn->f_obid = NIL;
+
         memcpy(&fn->f_attr, &G.g_wdta.d_attrib, sizeof(DTA)-offsetof(DTA,d_attrib));
         fn->f_seq = count++;
         size += fn->f_size;
