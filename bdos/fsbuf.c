@@ -113,6 +113,79 @@ void flush(BCB *b)
 }
 
 
+/*
+ *  flush_all_buffers - write every dirty buffer out, now
+ *
+ *  For a medium that is about to leave.  Lending the SD card to the other
+ *  machine over USB (bios/disk.c's disk_lend_sd()) reports the drive as
+ *  changed, and GEMDOS then throws its buffers away -- which is right for
+ *  a floppy somebody swapped, and wrong here, because some of those
+ *  buffers had been written to and had not gone out yet.  Thrown away
+ *  means thrown away: the FAT sector or the directory sector never
+ *  arrives, the other machine writes its own version over the top, and
+ *  what comes back is a directory that disagrees with the FAT.  That is
+ *  what cost a card its contents twice in one day.
+ *
+ *  Not flush() above, although the work is the same.  flush() reports a
+ *  BIOS error by longjmp()ing into the error buffer a GEMDOS call set up
+ *  for itself, and this runs from the BIOS, outside any such call: the
+ *  jump would land in a frame that is no longer there.  So the write goes
+ *  out through plain rwabs(), and a buffer that could not be written
+ *  keeps its dirty flag rather than pretending to be clean.
+ *
+ *  Returns E_OK, or the first error, having tried all of them regardless:
+ *  one unwritable buffer is no reason to abandon the others.
+ */
+/* Rwabs the way longjmp_rwabs() calls it, but returning the error
+   instead of jumping: past 32767 the record number goes in the long
+   argument and the short one is -1. */
+static LONG rwabs_rec(void *buf, LONG rec, int dev)
+{
+    if (rec <= 32767L)
+        return Rwabs(1, (long)buf, 1, (int)rec, dev, 0);
+
+    return Rwabs(1, (long)buf, 1, -1, dev, rec);
+}
+
+LONG flush_all_buffers(void)
+{
+    LONG err = E_OK;
+    BCB *b;
+    int i, n, d;
+    DMD *dm;
+
+    for (i = 0; i < 2; i++)
+    {
+        for (b = bufl[i]; b; b = b->b_link)
+        {
+            LONG ret;
+
+            if ((b->b_bufdrv == -1) || !b->b_dirty)
+                continue;
+
+            dm = b->b_dm;
+            n = b->b_buftyp;
+            d = b->b_bufdrv;
+
+            ret = rwabs_rec(b->b_bufr, b->b_bufrec + dm->m_recoff[n], d);
+
+            /* the second FAT, where there is one */
+            if ((ret == E_OK) && (n == BT_FAT) && !dm->m_1fat)
+                ret = rwabs_rec(b->b_bufr,
+                                b->b_bufrec + dm->m_recoff[BT_FAT] - dm->m_fsiz,
+                                d);
+
+            if (ret == E_OK)
+                b->b_dirty = 0;
+            else if (err == E_OK)
+                err = ret;
+        }
+    }
+
+    return err;
+}
+
+
 
 /*
  * getbcb - called by getrec() to get the BCB for the desired record

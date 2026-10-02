@@ -121,8 +121,32 @@ static int atari_partition(UWORD unit,LONG *devices_available);
 static BOOL sd_lent;
 static BOOL sd_changed;
 
+/*
+ * GEMDOS's own, declared here rather than by including bdos/fs.h: that
+ * header brings the whole file system's internals into the BIOS for one
+ * function, and this is the only one of them the BIOS has any business
+ * calling.
+ */
+LONG flush_all_buffers(void);
+
 LONG disk_lend_sd(WORD on)
 {
+    /*
+     * Everything written but not yet out goes out first.  Below, the
+     * drive is reported as changed and GEMDOS throws its buffers away;
+     * a dirty FAT or directory sector thrown away is a write that never
+     * happened, and the other machine is about to write its own version
+     * over the top of where it should have been.
+     *
+     * The error is deliberately not fatal.  If a buffer cannot be
+     * written the card is in trouble already, and refusing to lend it
+     * would leave the one copy of the data on a medium that is failing,
+     * reachable only from here.  It keeps its dirty flag and the lending
+     * goes ahead.
+     */
+    if (on)
+        flush_all_buffers();
+
     sd_lent = on ? TRUE : FALSE;
     sd_changed = TRUE;
 

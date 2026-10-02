@@ -434,6 +434,8 @@ extern BCB *bufl[2];              /* buffer lists: FAT and dir/data */
 void bufl_init(void);
 /* ??? */
 void flush(BCB *b);
+/* write every dirty buffer out, for a medium that is about to leave */
+LONG flush_all_buffers(void);
 /* return the ptr to the buffer containing the desired record */
 UBYTE *getrec(RECNO recn, OFD *of, int wrtflg);
 BCB *getbcb(DMD *dmd,WORD buftype,RECNO recnum);
