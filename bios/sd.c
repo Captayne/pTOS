@@ -94,6 +94,7 @@
                             /* these are millisecond timeout values (see SD specifications v4.10) */
 #define SD_POWERUP_DELAY_MSEC   1       /* minimum power-up time */
 #define SD_INIT_TIMEOUT_MSEC    1000    /* waiting for card to become ready */
+#define SD_INIT_ATTEMPTS        5       /* whole identifications, at boot */
 #define SD_READ_TIMEOUT_MSEC    100     /* waiting for start bit of data block */
 #define SD_WRITE_TIMEOUT_MSEC   500     /* waiting for end of busy */
                             /* these are derived timeout values in TOS ticks */
@@ -139,7 +140,7 @@ static UBYTE response[5];
 static void sd_cardtype(struct cardinfo *info);
 static int sd_command(UBYTE cmd,ULONG argument,UBYTE crc,UBYTE resptype,UBYTE *resp);
 static ULONG sd_calc_capacity(UBYTE *csd);
-static LONG sd_check(UWORD drv);
+static LONG sd_check(UWORD drv, LONG wait_msec);
 static void sd_features(struct cardinfo *info);
 static UBYTE sd_get_dataresponse(void);
 static int sd_mbtest(void);
@@ -158,7 +159,32 @@ static LONG sd_write(UWORD drv,ULONG sector,UWORD count,UBYTE *buf);
  */
 void sd_init(void)
 {
-    sd_check(0);    /* just drive 0 to check */
+    int try;
+
+    /*
+     *  Keep asking. A card that does not come up at boot leaves the
+     *  machine with no drive C, and then the desktop has no settings to
+     *  read and comes up bare -- which is how this shows itself, and it
+     *  happens often enough to be worth several attempts rather than
+     *  one. The cure that worked by hand was to take the card out and
+     *  put it back, so whatever state it is in does pass.
+     *
+     *  Each attempt re-runs the whole identification, waiting up to the
+     *  second the specification allows and clocking the card free first
+     *  (see sd_check()). Between attempts the bus is left alone for a
+     *  moment, because a card that answered nothing at all may still be
+     *  finishing its own power-up.
+     *
+     *  This costs nothing when the card is there, which is almost
+     *  always: the first attempt succeeds and the rest never run.
+     */
+    for (try = 0; try < SD_INIT_ATTEMPTS; try++) {
+        if (sd_check(0, SD_INIT_TIMEOUT_MSEC) == E_OK)
+            return;
+
+        KINFO(("sd: no card on attempt %d\n", try + 1));
+        delay_loop(loopcount_1_msec * 50UL);
+    }
 }
 
 /*
@@ -182,7 +208,7 @@ int i;
     for (i = 0; i < 2; i++) {
         /* see if we need to (re)initialise the card after a previous error */
         if (card.type == CARDTYPE_UNKNOWN) {
-            if (sd_check(dev)) {
+            if (sd_check(dev, 0)) {
                 ret = EDRVNR;
                 break;
             }
@@ -241,7 +267,7 @@ UBYTE cardreg[16];
     switch(ctrl) {
     case GET_DISKINFO:
         if (sd_special_read(CMD9,cardreg)) {    /* medium could have changed */
-            sd_check(drv);                      /* so try to reset & retry */
+            sd_check(drv, 0);                   /* so try to reset & retry */
             if (sd_special_read(CMD9,cardreg)) {
                 card.type = CARDTYPE_UNKNOWN;
                 rc = E_CHNG;
@@ -253,7 +279,7 @@ UBYTE cardreg[16];
         break;
     case GET_DISKNAME:
         if (sd_special_read(CMD10,cardreg)) {   /* medium could have changed */
-            sd_check(drv);                      /* so try to reset & retry */
+            sd_check(drv, 0);                   /* so try to reset & retry */
             if (sd_special_read(CMD10,cardreg)) {
                 card.type = CARDTYPE_UNKNOWN;
                 rc = E_CHNG;
@@ -272,7 +298,7 @@ UBYTE cardreg[16];
         if (sd_special_read(CMD9,cardreg) == 0)
             rc = MEDIANOCHANGE;
         else {
-            if (sd_check(drv))  /*  attempt to reset device  */
+            if (sd_check(drv, 0))  /*  attempt to reset device  */
                 card.type = CARDTYPE_UNKNOWN;
             rc = MEDIACHANGE;
         }
@@ -306,9 +332,10 @@ int rc = ERR;
 /*
  *  check drive for card present and re-initialise to handle it
  */
-static LONG sd_check(UWORD drv)
+static LONG sd_check(UWORD drv, LONG wait_msec)
 {
 int i, rc;
+ULONG deadline;
 
 #ifdef __mcoldfire__
     /* FIXME: Add and use HAS_SDMMC instead */
@@ -325,23 +352,72 @@ int i, rc;
     /* wait at least 1msec */
     DELAY_1_MSEC;
 
-    /* send at least 74 dummy clocks with CS unasserted (high) */
-    spi_cs_unassert();
-    for (i = 0; i < 10; i++)
-        spi_send_byte(0xff);
-
-    spi_cs_assert();
-
     /*
-     *  if CMD0 doesn't cause a switch to idle state, there's
-     *  probably no card inserted, so exit with error
+     *  Ask for idle state until the card answers, or until wait_msec is
+     *  up. Zero means one attempt, which is what every caller but the
+     *  cold start passes: sd_rw() calls this on a read error to reset the
+     *  card and try again, and a card that is genuinely not answering
+     *  would then cost a second on every block instead of failing at
+     *  once -- which turned a boot into several minutes of it.
+     *
+     *  Each attempt first clocks the card free, then does the power-up
+     *  sequence from the specification. The two are not the same job:
+     *
+     *  Resetting the processor does not reset the card. A card that was
+     *  in the middle of a command when the reset came stays there -- it
+     *  is still clocking out a block, or still busy after a write -- and
+     *  the 74 clocks below do not reach it, because they go out with the
+     *  card deselected and a deselected card says nothing. CMD0 then
+     *  arrives where the card expects data, there is no answer, and the
+     *  machine comes up with no drive C: a desktop that has forgotten its
+     *  settings. The only cure was to pull the card out, which is the
+     *  only thing that actually takes its power away.
+     *
+     *  So: select the card and clock 0xff at it until it answers 0xff
+     *  several times running, which is a card with nothing left to say.
+     *  A stuck block transfer runs out into nowhere, a busy state ends.
+     *  A healthy card is there after a byte or two; the limit is a little
+     *  over one block plus CRC, which is as long as a stuck one can need.
      */
-    rc = sd_command(CMD0,0L,0x95,R1,response);
-    if ((rc < 0) || !(rc&SD_ERR_IDLE_STATE)) {
-        KDEBUG(("CMD0 failed, rc=%d, response=0x%02x\n",rc,response[0]));
-        card.type = CARDTYPE_UNKNOWN;
+    deadline = DEADLINE(wait_msec);
+    for (;;) {
+        int quiet = 0;
+
+        spi_cs_assert();
+        for (i = 0; i < 600 && quiet < 8; i++)
+            quiet = (spi_recv_byte() == 0xff) ? quiet + 1 : 0;
+
+        /*
+         * Only when there was something to clock out, which is the case
+         * worth knowing about afterwards: a card that needed more than
+         * the eight bytes the counter itself costs had been left mid
+         * command, and one that never goes quiet is stuck beyond
+         * anything software can reach. A card that was simply ready says
+         * nothing, every boot, forever.
+         */
+        if (i > 8)
+            KINFO(("sd: %d bytes to quiet%s\n", i,
+                   (quiet < 8) ? " (never)" : ""));
+
+        /* send at least 74 dummy clocks with CS unasserted (high) */
         spi_cs_unassert();
-        return EDRVNR;
+        for (i = 0; i < 10; i++)
+            spi_send_byte(0xff);
+
+        spi_cs_assert();
+
+        rc = sd_command(CMD0,0L,0x95,R1,response);
+        if ((rc >= 0) && (rc&SD_ERR_IDLE_STATE))
+            break;
+
+        if (!BEFORE(deadline)) {
+            KINFO(("sd: CMD0 failed, rc=%d, response=0x%02x\n",rc,response[0]));
+            card.type = CARDTYPE_UNKNOWN;
+            spi_cs_unassert();
+            return EDRVNR;
+        }
+
+        DELAY_1_MSEC;
     }
 
     /*
