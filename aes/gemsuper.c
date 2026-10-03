@@ -77,12 +77,44 @@ static void aestrace(const char* message)
 #define aestrace(a)
 #endif
 
+/*
+ *  Gather an event rectangle out of the five int_in words that carry it.
+ *
+ *  evnt_mouse() and evnt_multi() pass a flag and four coordinates, and a
+ *  MOBLK holds exactly those five values -- so the obvious thing, and
+ *  what this did, is to point a MOBLK at the words and let the compiler
+ *  read them in place.
+ *
+ *  That only works where a MOBLK is five words wide.  Its first member is
+ *  a BOOL, which is an int, and on m68k the AES is built with -mshort, so
+ *  an int is a word and the overlay is exact.  Where an int is 32 bits it
+ *  is not: m_out swallows the flag and the x coordinate, the rectangle
+ *  slides one word along, and in_mrect() compares m_out -- now some large
+ *  number -- against inside(), which answers 0 or 1.  They never match,
+ *  so every rectangle reports "satisfied" the instant it is asked.
+ *
+ *  For a program that is what MU_M1 firing immediately looks like: a
+ *  button whose click is cancelled because the pointer apparently left
+ *  it, a text field that cannot be clicked into because every press looks
+ *  like the start of a drag.  Copying the five words costs nothing and
+ *  says what it means.
+ */
+static void fill_moblk(MOBLK *mo, WORD flags, WORD x, WORD y, WORD w, WORD h)
+{
+    mo->m_out    = (flags != 0);
+    mo->m_gr.g_x = x;
+    mo->m_gr.g_y = y;
+    mo->m_gr.g_w = w;
+    mo->m_gr.g_h = h;
+}
+
 static UWORD crysbind(WORD opcode, AESGLOBAL *pglobal, WORD control[], WORD int_in[], WORD int_out[], LONG addr_in[])
 {
     LONG    count, buparm;
     OBJECT  *tree;
     WORD    ret;
     WORD    unsupported = FALSE;
+    MOBLK   mo1, mo2;   /* the event rectangles; see fill_moblk() */
 
     count = 0L;
     ret = TRUE;
@@ -133,7 +165,12 @@ static UWORD crysbind(WORD opcode, AESGLOBAL *pglobal, WORD control[], WORD int_
         ret = ev_button(B_CLICKS, B_MASK, B_STATE, &EV_MX);
         break;
     case EVNT_MOUSE:
-        ev_mouse((MOBLK *)&MO_FLAGS, &EV_MX);
+        {
+            MOBLK mo;
+
+            fill_moblk(&mo, MO_FLAGS, MO_X, MO_Y, MO_WIDTH, MO_HEIGHT);
+            ev_mouse(&mo, &EV_MX);
+        }
         break;
     case EVNT_MESAG:
         aestrace("evnt_mesag()");
@@ -152,12 +189,14 @@ static UWORD crysbind(WORD opcode, AESGLOBAL *pglobal, WORD control[], WORD int_
         if (MU_FLAGS & MU_TIMER)
             count = MAKE_ULONG(MT_HICOUNT, MT_LOCOUNT);
         buparm = combine_cms(MB_CLICKS,MB_MASK,MB_STATE);
+        fill_moblk(&mo1, MMO1_FLAGS, MMO1_X, MMO1_Y, MMO1_WIDTH, MMO1_HEIGHT);
+        fill_moblk(&mo2, MMO2_FLAGS, MMO2_X, MMO2_Y, MMO2_WIDTH, MMO2_HEIGHT);
 #if CONF_WITH_MENU_EXTENSION
         ret = ev_multi((MU_FLAGS & MU_TOSVALID),
-                        (MOBLK *)&MMO1_FLAGS, (MOBLK *)&MMO2_FLAGS, NULL,
+                        &mo1, &mo2, NULL,
                         count, buparm, (WORD *)MME_PBUFF, &EV_MX);
 #else
-        ret = ev_multi(MU_FLAGS, (MOBLK *)&MMO1_FLAGS, (MOBLK *)&MMO2_FLAGS,
+        ret = ev_multi(MU_FLAGS, &mo1, &mo2,
                         count, buparm, (WORD *)MME_PBUFF, &EV_MX);
 #endif
         if ((ret & MU_MESAG) && (*(WORD *)MME_PBUFF == AC_CLOSE))
