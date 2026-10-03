@@ -18,6 +18,7 @@
 #include "wifisettings.h"
 #ifdef MACHINE_RP2350
 #include "rp2350_uart1.h"
+#include "rp2350_touch.h"
 #endif
 #include "disk.h"
 #include "has.h"
@@ -831,6 +832,12 @@ void fill_cookie_jar(void)
     rp2350_stik_add_cookie();   /* the network, for programs that
                                    look for STiK */
 #endif
+#endif
+
+#if CONF_WITH_RP2350_TOUCH
+    /* the touch panel as a pointing device (_TCH).  After the screen,
+       which it asks for its size. */
+    rp2350_touch_init();
 #endif
 
     /* the USB console, for programs that need it raw (_UCN) */

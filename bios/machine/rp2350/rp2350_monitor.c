@@ -30,6 +30,7 @@
 #if CONF_WITH_RP2350_LCD
 #include "lineavars.h"
 #include "rp2350_lcd.h"
+#include "rp2350_touch.h"
 #endif
 
 #define TIMER0_TIMERAWL     RP2350_REG(RP2350_TIMER0_BASE + 0x28)
@@ -184,19 +185,19 @@ void rp2350_monitor_nmi(ULONG *frame)
         mon_puthex(frame[7]);
         mon_puts("\r\n");
         mon_stacks();
-#if CONF_WITH_RP2350_LCD
+#if CONF_WITH_RP2350_TOUCH
         mon_puts("[touch] raw x=");
-        mon_puthex(rp2350_lcd_touch_raw_x);
+        mon_puthex(rp2350_touch_raw_x);
         mon_puts(" y=");
-        mon_puthex(rp2350_lcd_touch_raw_y);
+        mon_puthex(rp2350_touch_raw_y);
         mon_puts(" mouse x=");
         mon_puthex((UWORD)linea_vars.GCURX);
         mon_puts(" y=");
         mon_puthex((UWORD)linea_vars.GCURY);
         mon_puts(" noise x16 x=");
-        mon_puthex(rp2350_lcd_touch_noise_x);
+        mon_puthex(rp2350_touch_noise_x);
         mon_puts(" y=");
-        mon_puthex(rp2350_lcd_touch_noise_y);
+        mon_puthex(rp2350_touch_noise_y);
         mon_puts("\r\n[touch] taps=");
         mon_puthex(rp2350_touch_stat[0]);
         mon_puts(" dtaps=");
@@ -208,6 +209,8 @@ void rp2350_monitor_nmi(ULONG *frame)
         mon_puts(" gap=");
         mon_puthex(rp2350_touch_stat[4]);
         mon_puts("\r\n");
+#endif
+#if CONF_WITH_RP2350_LCD
         if (!stuck_ticks)
             mon_dump_fb();
 #endif

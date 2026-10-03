@@ -501,14 +501,30 @@ config CONF_WITH_RP2350_RTX
 	  happens, apart from the smaller memory.
 
 config CONF_WITH_RP2350_LCD
-	bool "RP2350: 2.8\" SPI display with touch (ILI9341, XPT2046)"
+	bool "RP2350: 2.8\" SPI display (ILI9341)"
 	depends on MACHINE_RP2350
 	default y
 	help
-	  A 320x240 SPI display with resistive touch on the 40 pin header
-	  (wiring: docs/superpowers/plans/2026-09-18-rp2350-port.md).  The
-	  screen becomes a 320x240 monochrome one, streamed to the display
-	  by PIO1 and DMA; the touch panel drives the mouse.
+	  A 320x240 SPI display on the 40 pin header (wiring:
+	  docs/superpowers/plans/2026-09-18-rp2350-port.md), streamed out by
+	  PIO1 and DMA.
+
+	  The touch panel that comes on the same glass is a separate option
+	  below: it is a pointing device, not part of the display, and a
+	  display reached any other way has none.
+
+config CONF_WITH_RP2350_TOUCH
+	bool "RP2350: resistive touch panel as a pointing device (XPT2046)"
+	depends on MACHINE_RP2350 && CONF_WITH_RP2350_LCD
+	default y
+	help
+	  The touch controller on the back of the 2.8" panel, polled on SPI0
+	  and driving the mouse.
+
+	  It needs a screen, because a reading only means something once it
+	  is mapped onto a pixel -- but it needs no particular screen, and it
+	  does not stop a real mouse working.  Both turn into the same
+	  relative movements, so they simply add up.
 
 config CONF_WITH_RP2350_STIK
 	bool "RP2350: TCP over the AT module, as STiK/STinG"

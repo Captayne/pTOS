@@ -87,6 +87,7 @@
 #include "rp2350_int.h"
 #if CONF_WITH_RP2350_LCD
 #include "rp2350_lcd.h"
+#include "rp2350_touch.h"
 #endif
 #endif
 #ifdef MACHINE_VIRT_M68K
@@ -662,9 +663,9 @@ static void bios_init(void)
     calibrate_delay();  /* determine values for delay() function */
                         /*  - requires interrupts to be enabled  */
 
-#if CONF_WITH_RP2350_LCD
+#if CONF_WITH_RP2350_TOUCH
     /* a finger on the touch screen at boot: calibrate it by hand */
-    rp2350_lcd_boot_calibration();
+    rp2350_touch_boot_calibration();
 #endif
 
     /* Initialize the DSP.  Since we currently use the system timer

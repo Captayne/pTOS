@@ -29,6 +29,7 @@
 #include "tosvars.h"
 #if CONF_WITH_RP2350_LCD
 #include "rp2350_lcd.h"
+#include "rp2350_touch.h"
 #endif
 #include "vectors.h"
 
@@ -227,6 +228,9 @@ void rp2350_systick_handler(void)
     rp2350_usbcon_timer();
 #if CONF_WITH_RP2350_LCD
     rp2350_lcd_tick();
+#endif
+#if CONF_WITH_RP2350_TOUCH
+    rp2350_touch_tick();
 #endif
 
     if (vector_5ms)

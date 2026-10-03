@@ -64,6 +64,7 @@ obj-$(CONF_WITH_RP2350_MONITOR) += rp2350_monitor.o
 obj-$(CONF_WITH_RP2350_SPI) += rp2350_spi.o
 obj-$(CONF_WITH_RP2350_RTX) += rp2350_rtx.o
 obj-$(CONF_WITH_RP2350_LCD) += rp2350_lcd.o
+obj-$(CONF_WITH_RP2350_TOUCH) += rp2350_touch.o
 obj-$(CONF_WITH_RP2350_STIK) += rp2350_stik.o
 # The flash primitives are not the drive's alone any more: the settings
 # store uses them too, and outlives it.
