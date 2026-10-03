@@ -71,6 +71,8 @@ PD      *run;           /* ptr to PD for current process */
  * The entry point rather than the load address, because that is what the
  * PD records: elfld.c sets p_tbase to load_base + (e_entry - link_base).
  */
+ULONG run_entry_point(void);   /* declared at its one caller */
+
 ULONG run_entry_point(void)
 {
     return run ? (ULONG)run->p_tbase : 0;
