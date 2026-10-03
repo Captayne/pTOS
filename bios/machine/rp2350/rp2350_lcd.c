@@ -169,10 +169,24 @@ static UBYTE mouse_buttons;
 #define TOUCH_STILL     10      /* pixels the finger may wobble when still */
 #define TOUCH_DCLICK    40      /* polls (400 ms) from a tap to a second one */
 #define TOUCH_DNEAR     24      /* pixels between them */
+/*
+ * How long a tap holds the button down.  A finger lifting is one event,
+ * but a click is two, and a program is entitled to look at the button
+ * between them: GEM draws a widget pressed while it is down and acts on
+ * it when it comes up, and graf_mkstate() asks for the state directly.
+ * Pressing and releasing in the same instant leaves nothing to find --
+ * the widget flickers, and whether the click counts at all depends on
+ * where in its event loop the program happened to be.
+ *
+ * 80 ms is in the middle of a real click (50-150 ms) and still well
+ * under TOUCH_DCLICK, so a deliberate double tap is not swallowed.
+ */
+#define TOUCH_CLICK     8       /* polls (80 ms) a tap holds the button */
 
 enum { T_IDLE, T_TAP, T_MOVE, T_DRAG };
 static UBYTE touch_state;
 static UBYTE touch_count;       /* polls touched (settling) or not (lifting) */
+static UBYTE click_polls;       /* polls left of a tap's button press */
 static UBYTE still_polls;       /* polls since the finger last moved */
 static WORD anchor_x, anchor_y; /* where it was then */
 static ULONG polls;             /* touch_poll() calls */
@@ -345,6 +359,8 @@ static void send_mouse(WORD dx, WORD dy)
 static void set_button(UBYTE buttons)
 {
     mouse_buttons = buttons;
+    click_polls = 0;            /* whoever presses or releases now owns
+                                   the button; no stale timer may undo it */
     send_mouse(0, 0);
 }
 
@@ -352,8 +368,10 @@ static void touch_lifted(void)
 {
     if (touch_state == T_TAP)
     {
-        set_button(0x02);               /* a tap: press and release */
-        set_button(0);
+        /* A tap presses here and releases TOUCH_CLICK polls later, in
+           touch_poll(): a click a program can actually observe. */
+        set_button(0x02);
+        click_polls = TOUCH_CLICK;
         rp2350_touch_stat[0]++;
         tap_valid = TRUE;
         tap_polls = polls;
@@ -391,6 +409,11 @@ static void touch_poll(void)
     int i;
 
     polls++;
+
+    /* the release that ends a tap's click, whether or not the panel is
+     * being touched again by now (see touch_lifted()) */
+    if (click_polls && --click_polls == 0)
+        set_button(0);
 
     /* mouse switched off by a program in the middle of a drag: the
      * button must not stay down */
