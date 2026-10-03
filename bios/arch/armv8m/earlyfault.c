@@ -138,6 +138,16 @@ static void dump(const char *what, int vector, ULONG *frame, ULONG fsr, ULONG fa
     putreg(" xpsr=", frame[16]);
     putreg("\r\nfsr=", fsr);
     putreg(" far=", far);
+    {
+        /* Where the running program's entry point is, so that a pc inside
+         * it can be turned back into a function name -- see the comment on
+         * run_entry_point() in bdos/proc.c.  Declared here rather than by
+         * including a BDOS header: this is the BIOS, and one prototype is
+         * a smaller dependency than bdos/proc.h brings with it. */
+        extern ULONG run_entry_point(void);
+
+        putreg(" prg=", run_entry_point());
+    }
     for (i = 0; i < 13; i++)
     {
         putstr(i % 4 ? " r" : "\r\nr");

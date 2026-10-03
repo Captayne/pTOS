@@ -57,6 +57,26 @@ static void proc_go(PD *p);
 PD      *run;           /* ptr to PD for current process */
 
 /*
+ * Where the running program's entry point ended up, or 0 before there is
+ * a program.
+ *
+ * bios/arch/armv8m/earlyfault.c prints this with every fault report,
+ * because a pc inside a program says nothing on its own: programs are
+ * linked at address zero and loaded wherever there was room, so a crash
+ * comes back as a number that names no function.  Subtract the entry
+ * symbol's own address -- from the program's map file -- to recover the
+ * load address, and every other pc in the report becomes an offset that
+ * the map can name.
+ *
+ * The entry point rather than the load address, because that is what the
+ * PD records: elfld.c sets p_tbase to load_base + (e_entry - link_base).
+ */
+ULONG run_entry_point(void)
+{
+    return run ? (ULONG)run->p_tbase : 0;
+}
+
+/*
  * internal variables
  */
 
