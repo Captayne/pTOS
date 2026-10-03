@@ -510,6 +510,22 @@ config CONF_WITH_RP2350_LCD
 	  screen becomes a 320x240 monochrome one, streamed to the display
 	  by PIO1 and DMA; the touch panel drives the mouse.
 
+config CONF_WITH_RP2350_STIK
+	bool "RP2350: TCP over the AT module, as STiK/STinG"
+	depends on MACHINE_RP2350 && CONF_WITH_RP2350_UART1
+	default y
+	help
+	  Publishes the cookie 'STiK' and the transport table behind it, so
+	  that any program written for an Atari network reaches this
+	  machine's module without being rewritten -- that interface is how
+	  every mail, chat and web program on the platform has found a
+	  network since the 1990s, and providing it turns a port into a
+	  recompile.
+
+	  Underneath is an ESP module on UART1, which shows through in two
+	  places: one connection at a time, and no UDP. Both refuse rather
+	  than pretend.  See include/stik.h.
+
 config CONF_WITH_RP2350_USBMSC
 	bool "RP2350: lend the SD card to the other machine over USB"
 	depends on MACHINE_RP2350 && CONF_WITH_SDMMC

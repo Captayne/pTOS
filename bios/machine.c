@@ -827,6 +827,10 @@ void fill_cookie_jar(void)
        a program that calls open() is unprivileged. */
     rp2350_uart1_init();
     rp2350_uart1_add_cookie();
+#if CONF_WITH_RP2350_STIK
+    rp2350_stik_add_cookie();   /* the network, for programs that
+                                   look for STiK */
+#endif
 #endif
 
     /* the USB console, for programs that need it raw (_UCN) */

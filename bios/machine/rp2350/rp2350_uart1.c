@@ -250,7 +250,7 @@ static LONG ua1_lost(void)
     return (LONG)rx_lost;
 }
 
-static const struct ua1_api ua1_api = {
+const struct ua1_api ua1_api = {
     UA1_VERSION,
     sizeof(struct ua1_api),
     ua1_open,
