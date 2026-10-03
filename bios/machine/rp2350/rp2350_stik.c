@@ -90,7 +90,7 @@ static BOOL peer_gone;          /* ...and the other end has finished */
    connection is opened: these live in pTOS and outlive the program
    being watched, so a ration spent on one page load is gone for the
    next -- which is how an earlier look at this saw nothing at all. */
-static int say_hdr;
+static int say_hdr, say_blk;
 
 /* ==== talking to the module =========================================== */
 
@@ -333,7 +333,7 @@ static short stik_TCP_open(ULONG rem_host, UWORD rem_port, UWORD tos,
     KINFO(("stik: connected\n"));
 
     conn = TRUE;
-    say_hdr = 0;
+    say_hdr = say_blk = 0;
     return THE_HANDLE;
 }
 
@@ -566,20 +566,35 @@ static short stik_CNget_block(short handle, void *buffer, short length)
 
     at_cmd(NULL, 3000, NULL, NULL);     /* the OK that ends the reply */
 
-    {   /* what was asked for, what the module said, and all of what
-           arrived -- enough to tell a short read from a misparsed header
-           from data that is simply not what it should be, and, with
-           every block shown rather than the first few, enough to read
-           the reply itself off the console and see where its reader
-           stopped */
+    {   /* What was asked for, what the module said, and the start of
+           what arrived: enough to tell a short read from a misparsed
+           header from data that is simply not what it should be.
+
+           The first few blocks go out in every build, because that is
+           what distinguishes a working connection from a broken one and
+           it costs a connection three lines.  The rest are KDEBUG: with
+           every block shown, a whole reply can be read off the console
+           and the exact point its reader stopped at can be seen -- which
+           is how the chunk-length bug was found -- but printing a page
+           while fetching it would slow down every transfer that works. */
         char peek[65];
         int i;
 
         for (i = 0; i < (int)sizeof(peek) - 1 && i < got; i++)
             peek[i] = (out[i] >= ' ' && out[i] < 127) ? out[i] : '.';
         peek[i] = '\0';
-        KINFO(("stik: asked %d, said %ld, got %ld [%s]\n",
-               length, actual, got, peek));
+
+        if (say_blk < 3)
+        {
+            say_blk++;
+            KINFO(("stik: asked %d, said %ld, got %ld [%s]\n",
+                   length, actual, got, peek));
+        }
+        else
+        {
+            KDEBUG(("stik: asked %d, said %ld, got %ld [%s]\n",
+                    length, actual, got, peek));
+        }
     }
 
     return (short)got;
