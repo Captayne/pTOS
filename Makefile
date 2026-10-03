@@ -489,7 +489,10 @@ $(EMUTOS_IMG): $(OBJECTS) obj/emutospp.ld
 ifeq ($(MACHINE_RP2350),y)
 	@./tools/check-no-fpu.sh $(OBJDUMP) gemasm.o $(OBJECTS)
 endif
-	@if [ $$(($$(awk '/^\.data /{print $$3}' emutos.map))) -gt 0 ]; then \
+# The carriage return is stripped because a Windows-hosted linker writes
+# the map file with CRLF line endings, and "0x6c\r" is not an arithmetic
+# expression.  Harmless where the endings are already Unix.
+	@if [ $$(($$(awk '/^\.data /{sub(/\r$$/,"",$$3); print $$3}' emutos.map))) -gt 0 ]; then \
 	  echo "### Warning: The DATA segment is not empty."; \
 	  echo "### Please examine emutos.map and use \"const\" where appropriate."; \
 	fi
