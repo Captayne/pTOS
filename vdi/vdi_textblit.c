@@ -525,7 +525,7 @@ static __inline__ UWORD *shift_and_update(UWORD *dst, UWORD *dstbit, UWORD *out)
     if (!*dstbit)           /* end of word ? */
     {
         *dstbit = 0x8000;   /* reset test bit */
-        *dst++ = *out;      /* output accumulated word */
+        put_buf_word(dst++, *out);  /* output accumulated word */
         *out = 0;           /* & reset it */
     }
 
@@ -547,7 +547,7 @@ static void scaleup(LOCALVARS *vars, UWORD *src, UWORD *dst)
 
     out = 0;
     accum = linea_vars.XDDA;
-    in = *src++;        /* prime the source word */
+    in = get_buf_word(src++);   /* prime the source word */
 
     for (i = vars->width; i > 0; i--)
     {
@@ -576,11 +576,11 @@ static void scaleup(LOCALVARS *vars, UWORD *src, UWORD *dst)
         if (!srcbit)
         {
             srcbit = 0x8000;
-            in = *src++;
+            in = get_buf_word(src++);
         }
     }
 
-    *dst = out;
+    put_buf_word(dst, out);
 }
 
 
@@ -598,7 +598,7 @@ static void scaledown(LOCALVARS *vars, UWORD *src, UWORD *dst)
 
     out = 0;
     accum = linea_vars.XDDA;
-    in = *src++;        /* prime the source word */
+    in = get_buf_word(src++);   /* prime the source word */
 
     for (i = vars->width; i > 0; i--)
     {
@@ -620,11 +620,11 @@ static void scaledown(LOCALVARS *vars, UWORD *src, UWORD *dst)
         if (!srcbit)
         {
             srcbit = 0x8000;
-            in = *src++;
+            in = get_buf_word(src++);
         }
     }
 
-    *dst = out;
+    put_buf_word(dst, out);
 }
 
 
