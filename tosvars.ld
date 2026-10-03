@@ -114,7 +114,6 @@ TOSVAR(bconin_vec, 0x53e);       /* 8 pointers to input routines */
 TOSVAR(bcostat_vec, 0x55e);      /* 8 pointers to output-status routines */
 TOSVAR(bconout_vec, 0x57e);      /* 8 pointers to output routines */
 TOSVAR(longframe, 0x59e);        /* if not 0, then not 68000 - use long stack frames */
-TOSVAR(p_cookies, 0x5a0);        /* pointer to cookie jar */
 TOSVAR(ramtop, 0x5a4);           /* top of TT-RAM, or NULL if no TT-RAM is present */
 TOSVAR(ramvalid, 0x5a8);         /* if equal to RAMVALID_MAGIC, then ramtop is valid */
 TOSVAR(bell_hook, 0x5ac);        /* pointer to routine for system bell */
@@ -139,6 +138,25 @@ TOSVAR(pmmutree, 0x700);         /* for pmmu tree on 68030 */
 ASSERT((ABSOLUTE(C_SYM(pmmutree)) & 0xf) == 0, "error: bad _pmmutree alignment");
 #endif
 #endif /* ARCH_M68K */
+
+/*
+ * The cookie jar pointer, on every architecture.
+ *
+ * The block above is m68k only because ARM software reaches these values
+ * through Ssystem() instead, and that held for as long as the only
+ * programs here were written for this machine. It stopped holding the
+ * moment a real TOS program was ported: a program finds the cookie jar
+ * by reading this longword, usually as Setexc(0x5a0/4, -1), and that is
+ * how it discovers every service the machine offers -- the network among
+ * them. Finding nothing there, it concludes there is no jar at all and
+ * stops, which is what it should do.
+ *
+ * So this one keeps its documented address everywhere, and
+ * bios/arch/arm/tosvars.c must NOT define it: an assignment here wins
+ * over a .bss definition silently, and then the variable the system
+ * writes through is not the one a program reads.
+ */
+TOSVAR(p_cookies, 0x5a0);        /* pointer to cookie jar */
 
 /*
  * The sysvars region ends at 0x800.

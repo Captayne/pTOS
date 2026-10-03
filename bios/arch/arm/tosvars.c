@@ -103,7 +103,23 @@ void (*prt_vec)(void);
 void (*aux_stat)(void);
 void (*aux_vec)(void);
 
-struct cookie *p_cookies;
+/*
+ * p_cookies is NOT defined here, on purpose.
+ *
+ * tosvars.ld puts it at 0x5a0, where Atari documented it and where every
+ * program that walks the cookie jar by hand looks for it -- the usual
+ * idiom is Setexc(0x5a0/4, -1), which reads that longword. A definition
+ * in this file wins against the linker's assignment, and the variable
+ * then lives wherever the linker felt like putting it: the system still
+ * works, because everything inside it reaches cookies through
+ * cookie.c, and Ssystem(S_GETCOOKIE) works for programs that ask that
+ * way. What does not work is every ported Atari program, which finds
+ * nothing at 0x5a0 and concludes there is no cookie jar at all.
+ *
+ * The same is true of the other variables here that tosvars.ld names,
+ * and setexc() already works around it for etv_timer/etv_critic/etv_term
+ * (bios/bios.c). This is the one that stops programs dead.
+ */
 
 void (*bell_hook)(void);
 void (*kcl_hook)(void);
