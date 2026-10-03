@@ -137,4 +137,27 @@ config CONF_RASPI_MOUSE_CURSOR
 	  cursor is used instead regardless of this setting, so it is safe
 	  to leave enabled for QEMU-targeted configs too.
 
+config CONF_WITH_VDI_FONT_DOUBLING
+	bool "Double a bitmap font when the size asked for is not there"
+	default n if MACHINE_RP2350
+	default y
+	help
+	  When a program asks for a point size the loaded bitmap fonts do
+	  not have, the VDI can take the largest font at or below half that
+	  size and draw it at twice its height and width.
+
+	  That is how TOS has always behaved, and software written for it
+	  expects a heading to come out bigger than its body text.  What it
+	  gives you is every pixel as a 2x2 block, which on a small screen
+	  costs a great deal of room for text that is no easier to read.
+
+	  Turn it off and a size that is not there becomes the nearest one
+	  that is: smaller than asked for, but drawn from real glyphs.  On a
+	  machine whose only fonts are the three built-in bitmaps, and whose
+	  screen is a few hundred pixels across, that is usually the better
+	  trade; it is the default on the RP2350 for both reasons.
+
+	  This has nothing to do with scaling being correct -- that is
+	  vdi/vdi_textblit.c's business, and it works either way.
+
 endmenu

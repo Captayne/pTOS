@@ -769,7 +769,15 @@ void vdi_vst_point(Vwk * vwk)
     if (single_font->point != test_height) {
         h = double_font->point * 2;
 
-        if ((h > single_font->point) && (h <= test_height)) {
+        /*
+         * Without CONF_WITH_VDI_FONT_DOUBLING a size we do not have
+         * becomes the nearest one we do, rather than a font drawn at
+         * twice its height with every pixel a 2x2 block.  See the help
+         * text in vdi/Kconfig for why that is the better trade on a
+         * small screen with three bitmap fonts.
+         */
+        if (CONF_WITH_VDI_FONT_DOUBLING
+            && (h > single_font->point) && (h <= test_height)) {
             vwk->dda_inc = 0xFFFF;
             vwk->t_sclsts = 1;
             vwk->cur_font = double_font;
