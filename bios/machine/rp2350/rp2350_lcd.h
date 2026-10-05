@@ -13,11 +13,12 @@
 #include "screen_mode.h"
 
 /*
- * What the framebuffer needs: 320 x 240 packed RGB565.  screen.c asks for
- * this before any workstation exists, so it cannot go through the mode
- * descriptor.
+ * What the framebuffer needs, packed RGB565.  screen.c asks for this
+ * before any workstation exists, so it cannot go through the mode
+ * descriptor -- and it is no longer a constant, because the size of the
+ * glass is no longer decided when this is compiled.  The answer comes
+ * from the kept settings (rp2350_nvram_vram_size()).
  */
-#define RP2350_LCD_VRAM_SIZE    (320UL * 240UL * 2)
 
 void rp2350_lcd_init(void);
 void rp2350_lcd_tick(void);

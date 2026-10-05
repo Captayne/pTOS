@@ -30,6 +30,7 @@
 #include "emutos.h"
 #include "rp2350.h"
 #include "rp2350_lcd.h"
+#include "rp2350_nvram.h"
 #include "lineavars.h"
 #include "tosvars.h"
 #include "asm.h"
@@ -90,9 +91,19 @@
 #define DMA_CTRL_BUSY   (1UL << 26)
 #define DREQ_PIO1_TX0   8
 
-#define WIDTH           320
-#define HEIGHT          240
-#define FRAME_WORDS     (WIDTH * HEIGHT)    /* UWORDs: one per pixel */
+/*
+ * The glass, as the machine was told it is.  These used to be two
+ * #defines, which made the image belong to one piece of glass: a panel
+ * of another size meant a compiler.  They are read once, in
+ * rp2350_lcd_init(), and used from then on -- a pin number or a pixel
+ * count costs nothing at run time, because neither is touched per pixel.
+ */
+static UWORD lcd_w = CONF_RP2350_LCD_WIDTH;
+static UWORD lcd_h = CONF_RP2350_LCD_HEIGHT;
+
+#define WIDTH           lcd_w
+#define HEIGHT          lcd_h
+#define FRAME_WORDS     ((ULONG)lcd_w * lcd_h)  /* UWORDs: one per pixel */
 
 /*
  * PIO program: shift the framebuffer out a bit at a time, most
@@ -270,6 +281,20 @@ void rp2350_lcd_init(void)
     unsigned int i;
     ULONG outs = BIT(LCD_SCK) | BIT(LCD_MOSI) | BIT(LCD_CS) | BIT(LCD_RST)
                | BIT(LCD_DC) | BIT(LCD_LED);
+#if CONF_WITH_RP2350_NVRAM
+    const struct rp2350_settings *set = rp2350_nvram_get();
+
+    /*
+     * The glass this machine was told it has.  Taken once, here, because
+     * screen.c has already sized the framebuffer from the same two
+     * numbers and the two must not be able to disagree.
+     */
+    if (set->scr_w && set->scr_h)
+    {
+        lcd_w = set->scr_w;
+        lcd_h = set->scr_h;
+    }
+#endif
 
     RESETS_CLR = RESET_DMA | RESET_PIO1;
     while ((RESETS_DONE & (RESET_DMA | RESET_PIO1))

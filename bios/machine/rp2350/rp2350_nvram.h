@@ -77,7 +77,59 @@ struct rp2350_settings {
      * written before there was an exporter says.
      */
     ULONG   profile_sum;
+
+    /*
+     * The screen.  Width and height are the active pixels; the bytes a
+     * framebuffer needs follow from them and from the format, and are
+     * never kept here -- a size that is written down can disagree with
+     * the resolution it belongs to, and a computed one cannot.
+     *
+     * refresh is in whole hertz.  It says nothing about the size and
+     * everything about the bandwidth: a streamed panel reads the whole
+     * framebuffer this many times a second, over the same QMI the
+     * processor fetches its code through.  Zero means "as fast as the
+     * path allows", which is what an SPI panel does -- it has no clock
+     * of its own to programme.
+     *
+     * vram_where is the one thing here that is a decision rather than a
+     * measurement, which is why it is kept at all.  See VRAM_* below.
+     */
+    UWORD   scr_w;
+    UWORD   scr_h;
+    UWORD   refresh;        /* Hz, 0 = as fast as the path allows */
+    UBYTE   bpp;            /* bits per pixel: 16 is RGB565 */
+    UBYTE   vram_where;     /* VRAM_AUTO, VRAM_STRAM, VRAM_PSRAM */
 };
+
+/*
+ * Where the framebuffer lives.  Not a detail: it decides whether the
+ * picture survives a flash write.  Every write takes both QSPI chip
+ * selects for 23 ms, so a framebuffer in the PSRAM starves while the
+ * settings are being kept and the image sits crooked afterwards -- but
+ * one in the SRAM is fed by DMA from memory the QMI never touches, and
+ * only the processor pauses.  The same machine is therefore able or
+ * unable to keep a setting while it is running, depending on this byte.
+ *
+ * AUTO means the SRAM while the framebuffer fits with room left for
+ * programs, and the PSRAM otherwise.  It is the right answer nearly
+ * always; the other two are for saying otherwise on purpose.
+ */
+#define VRAM_AUTO   0
+#define VRAM_STRAM  1
+#define VRAM_PSRAM  2
+
+/*
+ * What the framebuffer needs, from what is kept: the active pixels,
+ * plus the 2 KB every version of Atari TOS left after the screen
+ * because programs write past its end (bios/screen.c).
+ */
+ULONG rp2350_nvram_vram_size(void);
+
+/*
+ * VRAM_STRAM or VRAM_PSRAM -- never VRAM_AUTO.  Resolves what AUTO
+ * means on this machine, with this much memory.
+ */
+UBYTE rp2350_nvram_vram_where(void);
 
 #define RP2350_SETTINGS_VERSION 1
 

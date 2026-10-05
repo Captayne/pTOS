@@ -42,6 +42,7 @@
 #endif
 #if CONF_WITH_RP2350_LCD
 #include "rp2350_lcd.h"
+#include "rp2350_nvram.h"
 #endif
 #include "lisa.h"
 #include "nova.h"
@@ -807,8 +808,11 @@ static ULONG initial_vram_size(void)
 #elif defined(MACHINE_LISA)
     return 32*1024UL;
 #elif CONF_WITH_RP2350_LCD
-    /* a little over, like every version of Atari TOS: see above */
-    return RP2350_LCD_VRAM_SIZE + 2048UL;
+    /*
+     * From the resolution the machine was told it has.  The 2 KB over
+     * the end are added there, for the reason given above.
+     */
+    return rp2350_nvram_vram_size();
 #else
     ULONG vram_size;
 

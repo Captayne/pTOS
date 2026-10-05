@@ -531,6 +531,25 @@ config CONF_WITH_RP2350_LCD
 	  below: it is a pointing device, not part of the display, and a
 	  display reached any other way has none.
 
+config CONF_RP2350_LCD_WIDTH
+	int "Display width in pixels"
+	depends on CONF_WITH_RP2350_LCD
+	default 320
+
+config CONF_RP2350_LCD_HEIGHT
+	int "Display height in pixels"
+	depends on CONF_WITH_RP2350_LCD
+	default 240
+	help
+	  The active pixels of the glass.  Together with the format they
+	  give the size of the framebuffer, which is why that size is
+	  nowhere to be set: a number that is written down can disagree
+	  with the resolution it belongs to, and a computed one cannot.
+
+	  Like every other board fact here, this is only what a machine
+	  believes that has never been told otherwise.  What it runs on is
+	  kept in the settings.
+
 config CONF_WITH_RP2350_TOUCH
 	bool "RP2350: resistive touch panel as a pointing device (XPT2046)"
 	depends on MACHINE_RP2350 && CONF_WITH_RP2350_LCD

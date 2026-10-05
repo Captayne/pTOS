@@ -48,6 +48,7 @@
 #include "rp2350_nvram.h"
 #include "gemerror.h"
 #include "string.h"
+#include "tosvars.h"        /* phystop, for what AUTO means here */
 #include "kprint.h"
 
 #if CONF_WITH_RP2350_NVRAM
@@ -145,6 +146,14 @@ void rp2350_nvram_defaults(struct rp2350_settings *s)
     s->psram_cs = CONF_RP2350_PSRAM_CS_PIN;
 #endif
 
+#if CONF_WITH_RP2350_LCD
+    s->scr_w = CONF_RP2350_LCD_WIDTH;
+    s->scr_h = CONF_RP2350_LCD_HEIGHT;
+    s->bpp = 16;                /* RGB565: the only format there is a driver for */
+#endif
+    s->refresh = 0;             /* an SPI panel has no clock to programme */
+    s->vram_where = VRAM_AUTO;
+
     /* strncpy, except that there is no libc here */
     {
         const char *p = CONF_BOARD_NAME;
@@ -153,6 +162,62 @@ void rp2350_nvram_defaults(struct rp2350_settings *s)
         for (i = 0; i < (int)sizeof(s->board) && p[i]; i++)
             s->board[i] = p[i];
     }
+}
+
+/*
+ * The bytes a framebuffer needs.  Computed, never kept: see the header.
+ * The 2 KB on the end are not slack -- every version of Atari TOS left
+ * them there, and programs write past the screen relying on it
+ * (bios/screen.c).
+ */
+ULONG rp2350_nvram_vram_size(void)
+{
+    ULONG w = live.scr_w, h = live.scr_h, bpp = live.bpp;
+
+    /*
+     * Never 2 KB.  A framebuffer that small is not a smaller screen, it
+     * is memory the VDI walks straight out of, and the machine dies
+     * drawing its own boot screen.  If the settings say nothing, the
+     * answer is the screen this image was built for.
+     */
+    if (!w || !h || !bpp)
+    {
+#if CONF_WITH_RP2350_LCD
+        w = CONF_RP2350_LCD_WIDTH;
+        h = CONF_RP2350_LCD_HEIGHT;
+        bpp = 16;
+#else
+        return 2048UL;
+#endif
+    }
+
+    return w * h * ((bpp + 7) / 8) + 2048UL;
+}
+
+/*
+ * What AUTO means here.  The SRAM while the framebuffer fits and leaves
+ * enough behind for programs to run in, the PSRAM otherwise.
+ *
+ * The margin is the whole point.  "Fits" is the wrong test: a 320x240
+ * framebuffer fits into 456 KB of ST-RAM and leaves 306, which is a
+ * machine; a 400x800 one fits too and leaves nothing, which is not.
+ */
+#define VRAM_STRAM_MARGIN   (256UL * 1024UL)
+
+UBYTE rp2350_nvram_vram_where(void)
+{
+    ULONG need, stram;
+
+    if (live.vram_where != VRAM_AUTO)
+        return live.vram_where;
+
+    need = rp2350_nvram_vram_size();
+    stram = (ULONG)phystop;
+
+    if (need + VRAM_STRAM_MARGIN <= stram)
+        return VRAM_STRAM;
+
+    return VRAM_PSRAM;
 }
 
 /*
