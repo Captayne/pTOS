@@ -489,6 +489,24 @@ config CONF_RP2350_PSRAM_CS_PIN
 	  range and driving it locks the chip up, so a board with an A must
 	  say 0, 8 or 19 here.
 
+config CONF_BOARD_NAME
+	string "What this machine calls itself"
+	depends on MACHINE_RP2350
+	default "waveshare-pizero-ili9341"
+	help
+	  The name of a WIRING, not of a product.  Two people can buy the
+	  same core board and hang different things on different pins; they
+	  then have two machines, and a name that says only which PCB was
+	  bought cannot tell them apart.  Name what you built: what is
+	  connected, and what it is for.
+
+	  This is only what a machine believes that has never been told
+	  otherwise.  The real name is kept in the settings, where the
+	  board profile puts it, and it is what the boot screen shows.
+
+	  It will be generated from the profile once there is a tool to do
+	  it; until then it is written here by hand, in one place.
+
 config CONF_WITH_RP2350_RTX
 	bool "RP2350 real-time extension (core 1)"
 	depends on MACHINE_RP2350

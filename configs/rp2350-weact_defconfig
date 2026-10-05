@@ -1,3 +1,11 @@
+# WeAct Studio RP2350B core board, wired by hand (AK-Wiring) to the same
+# 2.8" ILI9341 module the Waveshare carries -- display, XPT2046 touch and
+# the microSD on the back of the module, all on the GPIO numbers the
+# drivers already use.  This is rp2350_defconfig with ONE line changed:
+# the WeAct brings the PSRAM chip select out on GP0, not GP47.
+#
+# Back to the Waveshare at any time with "make rp2350_defconfig".
+#
 # Waveshare RP2350-PiZero (RP2350B, Cortex-M33), booting straight to the
 # EmuCON command line on the serial console.  pTOS runs in place from the
 # QSPI flash; the UF2 image is copied onto the BOOTSEL drive.  See
@@ -33,6 +41,11 @@ AES_STACK_SIZE=1536
 # Bring-up: heartbeat NMI keeps the USB console alive and reports the PC.
 CONF_WITH_RP2350_MONITOR=y
 
+# The WeAct wires the PSRAM chip select to GP0; the Waveshare uses GP47.
+# Those are two of the only four pins the QMI can bring it out on (0, 8,
+# 19, 47) -- see the help text of this option in bios/Kconfig.
+CONF_RP2350_PSRAM_CS_PIN=0
+
 # The name of this WIRING, not of the PCB (bios/Kconfig).  Only what a
 # machine believes that has never been told otherwise.
-CONF_BOARD_NAME="waveshare-pizero-ili9341"
+CONF_BOARD_NAME="weact-ak-ili9341"

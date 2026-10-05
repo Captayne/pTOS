@@ -19,6 +19,7 @@
 #ifdef MACHINE_RP2350
 #include "rp2350_uart1.h"
 #include "rp2350_touch.h"
+#include "rp2350_nvram.h"
 #endif
 #include "disk.h"
 #include "has.h"
@@ -887,7 +888,16 @@ const char * machine_name(void)
 #elif defined(MACHINE_M548X)
     return m548x_machine_name();
 #elif defined(MACHINE_RP2350)
-    return "Waveshare RP2350-PiZero";
+#if CONF_WITH_RP2350_NVRAM
+    /*
+     * What the machine was told it is, not what this image was built
+     * believing.  One image runs on boards wired differently, so the
+     * name cannot live here any more than the pin numbers can.
+     */
+    return rp2350_nvram_board();
+#else
+    return CONF_BOARD_NAME;
+#endif
 #else
     return guess_machine_name();
 #endif

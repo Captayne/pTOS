@@ -447,10 +447,11 @@ static void bios_init(void)
     }
 #endif /* CONF_WITH_68040_PMMU */
 
-#if CONF_WITH_RP2350_NVRAM
-    /* before anything asks what the machine was told to believe */
-    rp2350_nvram_init();
-#endif
+/*
+ * The RP2350 reads its kept settings in rp2350_board_init(), long before
+ * this point: the PSRAM chip select is one of them, and the PSRAM is set
+ * up while the machine is still finding out how much memory it has.
+ */
 
     KDEBUG(("cookie_init()\n"));
     cookie_init();      /* sets a cookie jar */

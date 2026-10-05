@@ -18,6 +18,7 @@
 #include "rp2350_uart.h"
 #include "rp2350_usbcon.h"
 #include "rp2350_monitor.h"
+#include "rp2350_nvram.h"
 #include "asm.h"
 
 /* RESETS */
@@ -225,6 +226,15 @@ void rp2350_board_init(void)
 
     rp2350_uart0_init();
     rp2350_usbcon_init();
+#if CONF_WITH_RP2350_NVRAM
+    /*
+     * Before the PSRAM, because the PSRAM's chip select is one of the
+     * things the record names.  It can be read this early: it lives in
+     * the flash's XIP window, on the chip select the bootrom has already
+     * brought up, and reading it is reading memory.
+     */
+    rp2350_nvram_init();
+#endif
 #if CONF_WITH_RP2350_PSRAM
     /* before anything asks how much memory there is */
     rp2350_psram_init();

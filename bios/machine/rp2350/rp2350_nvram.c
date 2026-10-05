@@ -135,6 +135,41 @@ void rp2350_nvram_defaults(struct rp2350_settings *s)
 {
     memset(s, 0, sizeof(*s));
     s->version = RP2350_SETTINGS_VERSION;
+
+    /*
+     * Not zero: zero is GPIO 0, a pin a real board uses.  What an
+     * untold machine believes about its own wiring is what it was
+     * built believing.
+     */
+#if CONF_WITH_RP2350_PSRAM
+    s->psram_cs = CONF_RP2350_PSRAM_CS_PIN;
+#endif
+
+    /* strncpy, except that there is no libc here */
+    {
+        const char *p = CONF_BOARD_NAME;
+        int i;
+
+        for (i = 0; i < (int)sizeof(s->board) && p[i]; i++)
+            s->board[i] = p[i];
+    }
+}
+
+/*
+ * The name, always terminated, whatever the record holds.  A field that
+ * fills every byte is legal and carries no NUL, so it cannot be handed
+ * out as it stands.
+ */
+const char *rp2350_nvram_board(void)
+{
+    static char name[sizeof(live.board) + 1];
+    int i;
+
+    for (i = 0; i < (int)sizeof(live.board); i++)
+        name[i] = live.board[i];
+    name[i] = '\0';
+
+    return name[0] ? name : CONF_BOARD_NAME;
 }
 
 void rp2350_nvram_init(void)

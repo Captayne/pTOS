@@ -24,6 +24,7 @@
 #include "emutos.h"
 #include "rp2350.h"
 #include "memory.h"
+#include "rp2350_nvram.h"
 #include "kprint.h"
 
 #if CONF_WITH_RP2350_PSRAM
@@ -55,10 +56,21 @@
  * would have been guessing.
  */
 
-#define PSRAM_CS_PIN        CONF_RP2350_PSRAM_CS_PIN
+/*
+ * The pin is no longer a decision this image makes.  It comes from the
+ * kept settings (rp2350_nvram.h); what is compiled in is what a machine
+ * believes that has never been told otherwise.  So one image runs on
+ * both boards, and each behaves as its own.
+ *
+ * The check stays, because the QMI brings its second chip select out
+ * nowhere else.  It used to be the whole guarantee and is now the one
+ * about the default; psram_cs_pin() makes the same one about whatever
+ * the record says.
+ */
+#define PSRAM_CS_DEFAULT    CONF_RP2350_PSRAM_CS_PIN
 #define PSRAM_CS_FUNC       9               /* XIP_CS1 */
 
-#if PSRAM_CS_PIN != 0 && PSRAM_CS_PIN != 8  && PSRAM_CS_PIN != 19 && PSRAM_CS_PIN != 47
+#if PSRAM_CS_DEFAULT != 0 && PSRAM_CS_DEFAULT != 8 && PSRAM_CS_DEFAULT != 19 && PSRAM_CS_DEFAULT != 47
 #error CONF_RP2350_PSRAM_CS_PIN must be 0, 8, 19 or 47: the QMI brings its        second chip select out nowhere else
 #endif
 
@@ -95,12 +107,16 @@
 #define FMT_PREFIX_8        (1UL << 12)
 #define FMT_DUMMY_24        (6UL << 16)      /* 24 bits = 6 quad clocks */
 
-#if PSRAM_CS_PIN >= 32
-#define CS_PIN_LEVEL    ((RP2350_REG(RP2350_SIO_GPIO_HI_IN) \
-                          >> (PSRAM_CS_PIN - 32)) & 1)
-#else
-#define CS_PIN_LEVEL    ((RP2350_REG(RP2350_SIO_GPIO_IN) >> PSRAM_CS_PIN) & 1)
-#endif
+/*
+ * Which bank the pin is in is not known when this is compiled any more,
+ * so the test is made here rather than by the preprocessor.  It stays a
+ * macro on purpose: psram_setup() runs with the flash switched off, and
+ * a call to a function that lives in the flash would not come back.
+ */
+#define CS_PIN_LEVEL(pin)                                               \
+    ((pin) >= 32                                                        \
+     ? ((RP2350_REG(RP2350_SIO_GPIO_HI_IN) >> ((pin) - 32)) & 1)        \
+     : ((RP2350_REG(RP2350_SIO_GPIO_IN) >> (pin)) & 1))
 
 #define XIP_CTRL            RP2350_REG(0x400c8000UL)
 #define XIP_CTRL_WRITABLE_M1 (1UL << 11)    /* or writes go nowhere at all */
@@ -130,7 +146,7 @@ struct rp2350_psram_probe rp2350_psram_seen;
  * bytes, or 0.
  */
 __attribute__((section(".ramtext"), noinline))
-static ULONG psram_setup(void)
+static ULONG psram_setup(unsigned cs_pin)
 {
     ULONG divisor, period_fs, max_select, min_deselect, rxdelay;
     ULONG size = 0;
@@ -177,9 +193,9 @@ static ULONG psram_setup(void)
      * needing a chip on the other end.  Asserted must read 0, released 1.
      */
     QMI_DIRECT_CSR |= CSR_ASSERT_CS1N;
-    rp2350_psram_seen.cs_asserted = (UBYTE)CS_PIN_LEVEL;
+    rp2350_psram_seen.cs_asserted = (UBYTE)CS_PIN_LEVEL(cs_pin);
     QMI_DIRECT_CSR &= ~CSR_ASSERT_CS1N;
-    rp2350_psram_seen.cs_idle = (UBYTE)CS_PIN_LEVEL;
+    rp2350_psram_seen.cs_idle = (UBYTE)CS_PIN_LEVEL(cs_pin);
 
     /*
      * 0x9f, three address bytes, and then it says who it is: the
@@ -270,18 +286,42 @@ static BOOL psram_works(ULONG size)
     return *low == 0x50545331UL && *high == 0xa55aa55aUL;
 }
 
+/*
+ * Which pin the board says, and only a pin the QMI can actually use.  A
+ * record that names anything else is not obeyed: it would set a function
+ * on a pin that cannot carry it, and the symptom -- no memory -- would
+ * point at the chip rather than at the number.
+ *
+ * Runs before psram_setup(), while the flash still answers, because it
+ * reads the record out of the XIP window.
+ */
+static unsigned psram_cs_pin(void)
+{
+#if CONF_WITH_RP2350_NVRAM
+    unsigned pin = rp2350_nvram_get()->psram_cs;
+
+    if (pin == 0 || pin == 8 || pin == 19 || pin == 47)
+        return pin;
+
+    KINFO(("psram: kept settings name GPIO %d, which cannot carry the "
+           "chip select; using %d\n", pin, PSRAM_CS_DEFAULT));
+#endif
+    return PSRAM_CS_DEFAULT;
+}
+
 void rp2350_psram_init(void)
 {
+    unsigned cs_pin = psram_cs_pin();
     ULONG size;
 
     /* the chip select; the helper also releases the isolation latch in
      * the order the RP2350 wants it */
-    rp2350_gpio_set_function(PSRAM_CS_PIN, PSRAM_CS_FUNC);
+    rp2350_gpio_set_function(cs_pin, PSRAM_CS_FUNC);
 
-    size = psram_setup();
+    size = psram_setup(cs_pin);
 
     KINFO(("psram: cs on GPIO %d reads %d asserted, %d released\n",
-           PSRAM_CS_PIN, rp2350_psram_seen.cs_asserted,
+           cs_pin, rp2350_psram_seen.cs_asserted,
            rp2350_psram_seen.cs_idle));
     KINFO(("psram: id %02x%02x%02x%02x%02x%02x%02x%02x"
            " then %02x%02x%02x%02x%02x%02x%02x%02x\n",
@@ -296,7 +336,7 @@ void rp2350_psram_init(void)
 
     if (size == 0)
     {
-        KINFO(("psram: no chip answered on GPIO %d\n", PSRAM_CS_PIN));
+        KINFO(("psram: no chip answered on GPIO %d\n", cs_pin));
         return;
     }
 
