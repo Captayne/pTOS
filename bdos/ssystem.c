@@ -34,6 +34,9 @@
 #include "lineavars.h"
 #include "ahdi.h"
 #include "string.h"
+#if CONF_WITH_RP2350_NVRAM
+#include "rp2350_settings.h"
+#endif
 
 /* not in tosvars.h -- only bios/arch/arm/vectors.c otherwise uses it */
 extern volatile LONG vbclock;
@@ -436,6 +439,12 @@ LONG xssystem(WORD mode, LONG arg1, LONG arg2)
 
     case S_CONSOLE_DIM:
         return ssystem_console_dim(arg1, arg2);
+
+#if CONF_WITH_RP2350_NVRAM
+    case S_SETTINGS_GET:
+    case S_SETTINGS_PUT:
+        return rp2350_settings_ssystem(mode, arg1, arg2);
+#endif
 
     default:
         return EINVFN;

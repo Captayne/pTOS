@@ -221,6 +221,64 @@ UBYTE rp2350_nvram_vram_where(void)
 }
 
 /*
+ * rp2350_settings_ssystem - S_SETTINGS_GET / S_SETTINGS_PUT
+ *
+ * The same size-versioned copy as S_CONSOLE_DIM: fields are only ever
+ * added to the end of the record, so min(arg2, ours) is the part the
+ * caller and this kernel both understand.  arg2 == -1 reports our size.
+ *
+ * Writing is the half that needs a reason to refuse.  rp2350_nvram_put()
+ * erases and programs a sector, which takes both QSPI chip selects away
+ * for about 23 ms -- and the PSRAM hangs off the second one.  A machine
+ * scanning a framebuffer out of the PSRAM therefore loses its picture
+ * for two frames and does not get it back straight; one scanning out of
+ * the SRAM notices nothing, because DMA and PIO keep feeding from memory
+ * the QMI never touches and only the processor stalls.
+ *
+ * So the refusal is not caution, it is the difference between the two
+ * machines, and rp2350_nvram_vram_where() already knows which one this
+ * is.  A caller that really means it stops the panel first; there is no
+ * way to do that yet, which is exactly why this says so instead of
+ * pretending the write is harmless.
+ */
+LONG rp2350_settings_ssystem(WORD mode, LONG arg1, LONG arg2)
+{
+    struct rp2350_settings s;
+    LONG n;
+
+    if (arg2 == -1)
+        return (LONG)sizeof(s);
+    if (!arg1 || arg2 <= 0)
+        return EINVFN;
+
+    n = (arg2 < (LONG)sizeof(s)) ? arg2 : (LONG)sizeof(s);
+
+    if (mode == S_SETTINGS_GET)
+    {
+        memcpy((void *)arg1, rp2350_nvram_get(), n);
+        return n;
+    }
+
+    if (rp2350_nvram_vram_where() == VRAM_PSRAM)
+        return ERANGE;      /* would starve the scanout: see above */
+
+    /*
+     * Start from what is in force and let the caller overwrite as much
+     * of it as it knows about, so that a short struct from an older
+     * program keeps the fields it has never heard of instead of zeroing
+     * them.
+     */
+    memcpy(&s, rp2350_nvram_get(), sizeof(s));
+    memcpy(&s, (const void *)arg1, n);
+
+    {
+        LONG err = rp2350_nvram_put(&s);
+
+        return (err < 0) ? err : n;
+    }
+}
+
+/*
  * The name, always terminated, whatever the record holds.  A field that
  * fills every byte is legal and carries no NUL, so it cannot be handed
  * out as it stands.
@@ -237,6 +295,45 @@ const char *rp2350_nvram_board(void)
     return name[0] ? name : CONF_BOARD_NAME;
 }
 
+/*
+ * Is the rescue pin held?  Read with the internal pull-up, so a button
+ * to ground reads 0 when it is down.
+ *
+ * This runs before a single field of the record has been looked at,
+ * which is the whole point: the settings can carry a value that stops
+ * the machine before it finishes starting -- a PSRAM chip select on a
+ * pin where no memory answers hard faults -- and a door that is only
+ * reached afterwards would never be reached at all.
+ *
+ * The pull-up needs a moment to pull a floating pin up before it can be
+ * believed; a few thousand cycles are far more than enough at 150 MHz
+ * and cost nothing once per start.
+ */
+static BOOL rescue_held(void)
+{
+#if CONF_RP2350_RESCUE_PIN >= 0
+    volatile int wait;
+
+    rp2350_gpio_set_function(CONF_RP2350_RESCUE_PIN, RP2350_GPIO_FUNC_SIO);
+    rp2350_gpio_pull_up(CONF_RP2350_RESCUE_PIN);
+    for (wait = 0; wait < 10000; wait++)
+        ;
+
+    return ((RP2350_REG(RP2350_SIO_GPIO_IN) >> CONF_RP2350_RESCUE_PIN) & 1)
+           ? FALSE : TRUE;
+#else
+    return FALSE;
+#endif
+}
+
+/* Whether this start ignored what was kept.  For the boot screen. */
+static BOOL live_rescued;
+
+BOOL rp2350_nvram_rescued(void)
+{
+    return live_rescued;
+}
+
 void rp2350_nvram_init(void)
 {
     const struct record *a = XIP(SLOT_A_OFFSET);
@@ -246,6 +343,13 @@ void rp2350_nvram_init(void)
     rp2350_nvram_defaults(&live);
     live_slot = -1;
     live_sequence = 0;
+    live_rescued = rescue_held();
+
+    if (live_rescued)
+    {
+        KINFO(("nvram: rescue pin held; the kept settings are ignored\n"));
+        return;             /* defaults stand, and nothing is written */
+    }
 
     if (!rp2350_flash_init())
     {

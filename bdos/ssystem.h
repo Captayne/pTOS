@@ -72,6 +72,13 @@
  */
 #define S_CONSOLE_DIM   ((WORD)0xfffe)
 
+/*
+ * S_SETTINGS_GET / S_SETTINGS_PUT live in
+ * include/machine/rp2350/rp2350_settings.h, next to the record
+ * they reach: the BIOS implements them and a program calls
+ * them, and neither of those two can see this file.
+ */
+
 struct console_dim {
     UWORD width;        /* columns */
     UWORD height;       /* rows */
