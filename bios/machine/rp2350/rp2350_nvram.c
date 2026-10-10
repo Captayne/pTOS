@@ -58,10 +58,13 @@
  * image grows upwards from zero and the drive that used to live at
  * 0x900000 is gone: nothing here moves when pTOS gets bigger.
  */
-#define SECTOR_SIZE     4096UL
+/* Not SECTOR_SIZE: biosdefs.h has that name for the 512-byte disk
+ * sector, and rp2350_flashdisk.c and rp2350_usbmsc.c both mean that one.
+ * A flash erase sector is a different thing of a different size. */
+#define FLASH_SECTOR_SIZE   4096UL
 #define FLASH_SIZE      0x01000000UL
-#define SLOT_A_OFFSET   (FLASH_SIZE - 2 * SECTOR_SIZE)
-#define SLOT_B_OFFSET   (FLASH_SIZE - 1 * SECTOR_SIZE)
+#define SLOT_A_OFFSET   (FLASH_SIZE - 2 * FLASH_SECTOR_SIZE)
+#define SLOT_B_OFFSET   (FLASH_SIZE - 1 * FLASH_SECTOR_SIZE)
 
 #define XIP(offs)       ((const struct record *)(0x10000000UL + (offs)))
 
@@ -105,7 +108,7 @@ static BOOL record_valid(const struct record *r)
 {
     if (r->magic != NVRAM_MAGIC)
         return FALSE;
-    if (r->length == 0 || r->length > SECTOR_SIZE - sizeof(struct record)
+    if (r->length == 0 || r->length > FLASH_SECTOR_SIZE - sizeof(struct record)
                                     + sizeof(struct rp2350_settings))
         return FALSE;
     return checksum((const UBYTE *)&r->settings, r->length) == r->sum;
@@ -402,7 +405,7 @@ LONG rp2350_nvram_put(const struct rp2350_settings *s)
     memcpy(&r->settings, s, sizeof(struct rp2350_settings));
     r->sum = checksum((const UBYTE *)&r->settings, r->length);
 
-    rp2350_flash_erase(offs, SECTOR_SIZE);
+    rp2350_flash_erase(offs, FLASH_SECTOR_SIZE);
     rp2350_flash_program(offs, page, sizeof(page));
 
     if (!record_valid(XIP(offs)))
