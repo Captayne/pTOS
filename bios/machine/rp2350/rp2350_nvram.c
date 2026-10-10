@@ -296,43 +296,23 @@ const char *rp2350_nvram_board(void)
 }
 
 /*
- * Is the rescue pin held?  Read with the internal pull-up, so a button
- * to ground reads 0 when it is down.
+ * There was a rescue pin here -- a GPIO read before any field of the
+ * record was looked at, which when held made the machine ignore what
+ * was kept.  The case it was built for is real: a record can carry a
+ * value that stops the machine before it finishes starting, and a wrong
+ * PSRAM chip select hard faults rather than merely losing the Alternate
+ * RAM.
  *
- * This runs before a single field of the record has been looked at,
- * which is the whole point: the settings can carry a value that stops
- * the machine before it finishes starting -- a PSRAM chip select on a
- * pin where no memory answers hard faults -- and a door that is only
- * reached afterwards would never be reached at all.
- *
- * The pull-up needs a moment to pull a floating pin up before it can be
- * believed; a few thousand cycles are far more than enough at 150 MHz
- * and cost nothing once per start.
+ * It is gone anyway, because the recovery is better without it.  A pin
+ * had to be read by the very firmware it was protecting against, needed
+ * a free GPIO on every board, and was never once exercised.  The
+ * bootrom's BOOT button needs none of that: it runs when pTOS cannot,
+ * it is on every board, and everybody already knows it.  What it could
+ * not do by itself was clear a bad record -- a reflash writes the image
+ * and leaves the top two sectors alone -- so tools/gemwipef.py grew a
+ * --settings mode that erases exactly those two.  Hold BOOT, erase,
+ * reflash, and the machine is back on its compiled-in defaults.
  */
-static BOOL rescue_held(void)
-{
-#if CONF_RP2350_RESCUE_PIN >= 0
-    volatile int wait;
-
-    rp2350_gpio_set_function(CONF_RP2350_RESCUE_PIN, RP2350_GPIO_FUNC_SIO);
-    rp2350_gpio_pull_up(CONF_RP2350_RESCUE_PIN);
-    for (wait = 0; wait < 10000; wait++)
-        ;
-
-    return ((RP2350_REG(RP2350_SIO_GPIO_IN) >> CONF_RP2350_RESCUE_PIN) & 1)
-           ? FALSE : TRUE;
-#else
-    return FALSE;
-#endif
-}
-
-/* Whether this start ignored what was kept.  For the boot screen. */
-static BOOL live_rescued;
-
-BOOL rp2350_nvram_rescued(void)
-{
-    return live_rescued;
-}
 
 void rp2350_nvram_init(void)
 {
@@ -343,13 +323,6 @@ void rp2350_nvram_init(void)
     rp2350_nvram_defaults(&live);
     live_slot = -1;
     live_sequence = 0;
-    live_rescued = rescue_held();
-
-    if (live_rescued)
-    {
-        KINFO(("nvram: rescue pin held; the kept settings are ignored\n"));
-        return;             /* defaults stand, and nothing is written */
-    }
 
     if (!rp2350_flash_init())
     {

@@ -489,29 +489,15 @@ config CONF_RP2350_PSRAM_CS_PIN
 	  range and driving it locks the chip up, so a board with an A must
 	  say 0, 8 or 19 here.
 
-config CONF_RP2350_RESCUE_PIN
-	int "GPIO of the button that makes the machine ignore its settings"
-	depends on CONF_WITH_RP2350_NVRAM
-	default 23
-	range -1 47
-	help
-	  Held down while the machine starts, the kept settings are ignored
-	  and it comes up on what this image was built believing.  -1 if
-	  the board has no such pin.
-
-	  This is not a convenience, it is the condition under which the
-	  settings may be written at all.  Measured on a WeAct RP2350B:
-	  the same image with the wrong PSRAM chip select does not start
-	  short of its Alternate RAM, it hard faults -- and in that state
-	  the 1200 baud reboot gemflash.py relies on is not served either,
-	  so the only way back is the bootrom's own BOOT button and a
-	  reflash.  A record is as able to carry that mistake as a build is.
-
-	  The pin must be a plain GPIO that goes to ground, and it is read
-	  with the internal pull-up before anything out of the record has
-	  been applied -- so it can depend on nothing in it.  A board with
-	  no button needs a pin one can reach with a wire; it does not need
-	  a button.
+# There was a CONF_RP2350_RESCUE_PIN here: a GPIO held at start to make
+# the machine ignore its kept settings.  It is gone, and the recovery
+# from a bad record is the bootrom's own BOOT button plus
+# tools/gemwipef.py --settings, which erases the two sectors the record
+# lives in.  That works on a machine that does not start at all, because
+# the bootrom runs and pTOS does not -- whereas a pin had to be read by
+# the very firmware it was protecting against.  It also needed a free
+# GPIO on every board, and on the Waveshare the default landed on the
+# display's reset line.
 
 config CONF_BOARD_NAME
 	string "What this machine calls itself"

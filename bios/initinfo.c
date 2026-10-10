@@ -424,17 +424,7 @@ WORD initinfo(ULONG *pshiftbits)
      * defaults; this says which, without needing a console.
      */
     pair_start("Settings");
-    if (rp2350_nvram_rescued())
-        /*
-         * Not the same as "defaults".  A machine on defaults because
-         * somebody held the rescue pin and one on defaults because its
-         * record is gone look alike from here, and the difference is
-         * exactly what matters to whoever is trying to get out of a bad
-         * setting: this one still has its record, and will be back on it
-         * at the next start.
-         */
-        cprintf("ignored, rescue pin held");
-    else if (rp2350_nvram_slot() < 0)
+    if (rp2350_nvram_slot() < 0)
         cprintf("defaults");
     else
         cprintf("slot %c, saved %lu", rp2350_nvram_slot() ? 'B' : 'A',

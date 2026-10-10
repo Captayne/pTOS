@@ -60,7 +60,6 @@ const char *rp2350_nvram_board(void);
  * gone are not the same thing, and the difference matters precisely when
  * somebody is trying to get out of a bad setting.
  */
-BOOL rp2350_nvram_rescued(void);
 
 /*
  * Keep these instead.  One flash erase and one program, which is about
