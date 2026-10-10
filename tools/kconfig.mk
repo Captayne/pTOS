@@ -104,12 +104,12 @@ savedefconfig:
 
 .PHONY: allnoconfig
 allnoconfig:
-	$(PYTHON) -m allnoconfig --kconfig $(KCONFIG_TOP)
+	$(PYTHON) -m allnoconfig $(KCONFIG_TOP)
 
 .PHONY: alldefconfig
 alldefconfig:
-	$(PYTHON) -m alldefconfig --kconfig $(KCONFIG_TOP)
+	$(PYTHON) -m alldefconfig $(KCONFIG_TOP)
 
 .PHONY: listnewconfig
 listnewconfig:
-	$(PYTHON) -m listnewconfig --kconfig $(KCONFIG_TOP)
+	$(PYTHON) -m listnewconfig $(KCONFIG_TOP)
